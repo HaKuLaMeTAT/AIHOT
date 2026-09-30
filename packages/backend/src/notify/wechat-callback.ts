@@ -54,6 +54,10 @@ export async function recordWechatSend(deliveryId: number, result: WechatResult)
   await sql.begin(async tx => {
     if (appId && result.messageId) await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`wechat:${appId}:${result.messageId}`},0))`;
     await tx`UPDATE deliveries SET status=${result.status},response=${result.response},sent_at=${result.status === "sent" ? new Date() : null},
+      wechat_delivery_status=CASE WHEN wechat_message_id IS DISTINCT FROM ${result.messageId ?? null}
+        OR wechat_app_id IS DISTINCT FROM ${result.messageId ? appId : null} THEN NULL ELSE wechat_delivery_status END,
+      wechat_delivery_at=CASE WHEN wechat_message_id IS DISTINCT FROM ${result.messageId ?? null}
+        OR wechat_app_id IS DISTINCT FROM ${result.messageId ? appId : null} THEN NULL ELSE wechat_delivery_at END,
       wechat_message_id=${result.messageId ?? null},wechat_app_id=${result.messageId ? appId : null},updated_at=now() WHERE id=${deliveryId}`;
     if (appId && result.messageId) await reconcileWechatDelivery(appId, result.messageId, tx);
   });
