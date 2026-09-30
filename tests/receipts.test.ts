@@ -10,7 +10,9 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { chatJson, ModelOutputError } from "@aihot/backend/providers/llm";
 import { embeddingsAvailable } from "@aihot/backend/providers/embeddings";
 import { BudgetExceededError, paidRequest, ReceiptUnknownError } from "@aihot/backend/providers/receipts";
-import { autoReleaseUnknownReceipts } from "@aihot/backend/admin/runs";
+import { autoReleaseUnknownReceipts, releaseReceipt } from "@aihot/backend/admin/runs";
+import { upsertMaterial } from "@aihot/backend/content/materials";
+import { stopBoss } from "@aihot/backend/jobs/queue";
 
 const usage = { prompt_tokens: 80, completion_tokens: 20, total_tokens: 100 };
 let answer: (hit: number) => string = () => '{"ok":true}';
@@ -29,6 +31,7 @@ before(async () => {
 after(async () => {
   if (savedBudget) await sql`UPDATE budgets SET per_minute = ${savedBudget.per_minute}, per_hour = ${savedBudget.per_hour}, per_day = ${savedBudget.per_day} WHERE service = 'deepseek'`;
   await provider.close();
+  await stopBoss();
   await closeDb();
 });
 
@@ -129,4 +132,51 @@ test("an unknown outcome is released automatically once, so a lost answer costs 
   assert.equal(await status(), "unknown", "a second loss waits for the admin");
   await assert.rejects(paidRequest(req, lost), ReceiptUnknownError);
   assert.equal(sent, 2);
+});
+
+async function stoppedArticle(purpose: string, needsBody = false) {
+  const key = tag();
+  const sourceId = `recovery-${key}`;
+  await sql`INSERT INTO sources (id, name, kind, config) VALUES (${sourceId}, 'Recovery', 'rss', '{"fetchPublicContent":true}')`;
+  const { articleId } = await upsertMaterial({ sourceId, url: `https://example.com/recovery-${key}`, title: "Recovery", via: "fetch",
+    bodyStatus: needsBody ? "pending" : "ok", bodyText: needsBody ? undefined : "body" });
+  const subject = needsBody ? `article:${articleId}` : `article:${articleId}@1`;
+  await assert.rejects(paidRequest({ service: "invariant-unbudgeted", purpose, subject, identity: { key } },
+    () => Promise.reject(new Error("socket hang up after sending"))));
+  await sql`UPDATE articles SET processing_state = 'failed', processing_attempts = 3,
+    processing_retry_at = now() + interval '1 hour', processing_error = 'receipt outcome unknown' WHERE id = ${articleId}`;
+  const [receipt] = await sql<{ id: number }[]>`SELECT id FROM receipts WHERE subject = ${subject}`;
+  return { articleId, receiptId: receipt!.id };
+}
+
+test("automatic release requeues the failed articles of all five analysis steps", async () => {
+  const ids: string[] = [];
+  for (const purpose of ["prefilter_article", "score_article", "understand_article", "summarize_article", "structure_article"]) {
+    const { articleId, receiptId } = await stoppedArticle(purpose);
+    ids.push(articleId);
+    await sql`UPDATE receipts SET updated_at = now() - interval '31 minutes' WHERE id = ${receiptId}`;
+  }
+  assert.deepEqual(await autoReleaseUnknownReceipts(), { released: 5, requeued: 5 });
+  const rows = await sql<{ state: string; attempts: number; retry: Date | null; error: string | null }[]>`
+    SELECT processing_state AS state, processing_attempts AS attempts, processing_retry_at AS retry, processing_error AS error
+    FROM articles WHERE id = ANY(${ids}::text[])`;
+  assert.equal(rows.length, ids.length);
+  for (const row of rows) assert.deepEqual(row, { state: "new", attempts: 0, retry: null, error: null });
+  const jobs = await sql`SELECT id FROM pgboss.job WHERE name = 'content.analyze' AND data->>'articleId' = ANY(${ids}::text[])`;
+  assert.equal(jobs.length, ids.length, "each article has a real processing job");
+  assert.deepEqual(await autoReleaseUnknownReceipts(), { released: 0, requeued: 0 }, "a released receipt is not queued twice");
+});
+
+test("manual release resumes pending body reads and leaves unrelated article work alone", async () => {
+  for (const purpose of ["body_fallback", "x_article"]) {
+    const { articleId, receiptId } = await stoppedArticle(purpose, true);
+    const result = await releaseReceipt(receiptId, { billed: false, note: "checked the provider" }, "test");
+    assert.equal(result?.requeued, true, purpose);
+    const jobs = await sql<{ name: string }[]>`SELECT name FROM pgboss.job WHERE data->>'articleId' = ${articleId}`;
+    assert.deepEqual(jobs.map((j) => j.name), ["content.extract-body"], "the unfinished body is fetched before analysis");
+  }
+  const { articleId, receiptId } = await stoppedArticle("translate_body");
+  assert.equal((await releaseReceipt(receiptId, { billed: false, note: "checked the provider" }, "test"))?.requeued, false);
+  const [article] = await sql<{ state: string }[]>`SELECT processing_state AS state FROM articles WHERE id = ${articleId}`;
+  assert.equal(article!.state, "failed", "translation is not a reason to rerun the editorial pipeline");
 });
