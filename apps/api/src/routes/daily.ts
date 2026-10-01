@@ -14,10 +14,12 @@ export function registerDaily(app: FastifyInstance) {
     const { articleId } = req.params as { articleId: string };
     const row = await publicNotification(articleId);
     if (!row) return reply.code(404).type("text/plain; charset=utf-8").send("此事件暂不可显示。");
+    const included = new Date(Math.max(row.timeline_at.getTime(), row.visible_after!.getTime()));
     return reply.type("text/html; charset=utf-8").send(renderDaily({ channel: row.category?.startsWith("stock-") ? "stock" : "ai",
-      key: beijingDate(row.timeline_at), windowStart: row.timeline_at.toISOString(), windowEnd: row.timeline_at.toISOString(),
+      key: beijingDate(included), windowStart: included.toISOString(), windowEnd: included.toISOString(),
       entries: [{ title: row.title, summary: row.summary ?? "", category: row.category, sourceName: row.source_name,
-        sourceUrl: row.url, publishedAt: row.timeline_at.toISOString() }] }, false, true));
+        sourceUrl: row.url, publishedAt: row.published_at?.toISOString() ?? null,
+        discoveredAt: row.discovered_at.toISOString(), includedAt: included.toISOString() }] }, false, true));
   });
   app.get("/daily/:channel/latest", async (req, reply) => {
     reply.header("Cache-Control", "no-store").header("X-Robots-Tag", "noindex, nofollow");
@@ -35,7 +37,7 @@ export function registerDaily(app: FastifyInstance) {
       .header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
       .header("Referrer-Policy", "no-referrer").header("X-Content-Type-Options", "nosniff");
     const name = channel === "ai" ? "AI" : "股市";
-    const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}历史日报</title><style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#24241f;background:#f5f2e9;line-height:1.8;max-width:760px;margin:auto;padding:24px}a{color:#175d51;display:block;padding:16px 0;border-bottom:1px solid #c9c7bc}small{color:#65675c}a:focus-visible{outline:2px solid #175d51}</style><h1>${name}历史日报</h1><p>最近已生成且仍有公开精选的 30 期</p>${entries.map(e => `<a href="${e.path}">${e.key} ${dailyEditionLabel(e.edition)}${e.supplement ? ` · 补充 ${e.supplement}` : ""}<br><small>精选 ${e.count} 条 · 截止 ${beijingDate(e.windowEnd)} ${beijingTime(e.windowEnd)}</small></a>`).join("") || "<p>暂无已生成且可显示的日报。</p>"}<p><a href="/daily/${channel === "ai" ? "stock" : "ai"}/history">查看${channel === "ai" ? "股市" : "AI"}归档</a></p></html>`;
+    const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name}历史日报</title><style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#24241f;background:#f5f2e9;line-height:1.8;max-width:760px;margin:auto;padding:24px}a{color:#175d51;display:block;padding:16px 0;border-bottom:1px solid #c9c7bc}small{color:#65675c}a:focus-visible{outline:2px solid #175d51}</style><h1>${name}历史日报</h1><p>最近已生成的 30 期，包含无新增精选提示</p>${entries.map(e => `<a href="${e.path}">${e.key} ${dailyEditionLabel(e.edition)}${e.supplement ? ` · 补充 ${e.supplement}` : ""}<br><small>${e.count ? `精选 ${e.count} 条` : "本期暂无新增精选"} · 截止 ${beijingDate(e.windowEnd)} ${beijingTime(e.windowEnd)}</small></a>`).join("") || "<p>暂无已生成且可显示的日报。</p>"}<p><a href="/daily/${channel === "ai" ? "stock" : "ai"}/history">查看${channel === "ai" ? "股市" : "AI"}归档</a></p></html>`;
     return reply.type("text/html; charset=utf-8").send(html);
   });
   app.get("/daily/preview/:channel", async (req, reply) => {

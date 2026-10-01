@@ -10,7 +10,7 @@ import { pushSelected } from "@aihot/backend/notify/selected";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import type { Candidate } from "@aihot/backend/publication/report-candidates";
 import { personalEvents, personalFacts } from "@aihot/backend/publication/report-candidates";
-import { loadPersonalDaily } from "@aihot/backend/publication/personal-daily";
+import { loadPersonalDaily, listPersonalDailies } from "@aihot/backend/publication/personal-daily";
 import { renderDaily } from "../apps/api/src/daily/render.ts";
 import { randomUUID } from "node:crypto";
 
@@ -31,7 +31,10 @@ test("a page card needs a public HTTPS origin and carries no multi-item long sum
     assert.equal(card.url, "https://news.example.com/daily/ai/2021-03-02");
     assert.ok([...card.summary].length <= 20);
     assert.ok(card.summary.includes("9"));
-    assert.equal(dailyPageMessage("ai", "2021-03-02", 0, DAY), null);
+    const empty = dailyPageMessage("ai", "2021-03-02", 0, DAY)!;
+    assert.ok(empty.summary.includes("本期暂无新增精选"));
+    assert.equal(empty.url, card.url);
+    assert.ok([...empty.summary].length <= 20);
   } finally { if (previous === undefined) delete process.env.DAILY_PUBLIC_BASE_URL; else process.env.DAILY_PUBLIC_BASE_URL = previous; }
 });
 before(async () => {
@@ -42,14 +45,14 @@ before(async () => {
 });
 after(async () => {
   await sql`UPDATE notify_targets SET enabled=false WHERE key=${TARGET}`;
-  await sql`DELETE FROM notification_reports WHERE key IN ('2021-03-01','2021-03-02','2021-03-03','2021-03-05','2021-05-20','2021-05-21','2021-07-02:morning','2021-07-02:evening','2021-07-03:morning','2022-03-02','2022-03-03','2023-03-02:morning')`;
+  await sql`DELETE FROM notification_reports WHERE key IN ('2021-03-01','2021-03-02','2021-03-03','2021-03-05','2021-05-20','2021-05-21','2021-07-02:morning','2021-07-02:evening','2021-07-03:morning','2022-03-02','2022-03-03','2023-03-02:morning','2024-07-02:evening','2024-07-03:evening')`;
   await stopBoss();
   await closeDb();
 });
 
-async function article(label: string, category = "ai-models", discovered = "2021-03-01T23:00:00Z", released = discovered) {
+async function article(label: string, category = "ai-models", discovered = "2021-03-01T23:00:00Z", released = discovered, published: string | null = discovered) {
   const { articleId } = await upsertMaterial({ sourceId: SOURCE, url: `https://example.com/${T}/${label}`, title: label,
-    bodyText: "原始公告正文", bodyStatus: "ok", discoveredAt: new Date(discovered), publishedAt: new Date(discovered), via: "fetch" });
+    bodyText: "原始公告正文", bodyStatus: "ok", discoveredAt: new Date(discovered), publishedAt: published ? new Date(published) : undefined, via: "fetch" });
   await sql`INSERT INTO analyses (article_id,input_revision,origin,relevance,category,title_zh,summary_zh,score,selected)
     VALUES (${articleId},1,'rule','pass',${category},${label},'测试摘要',90,true)`;
   await publishArticle(articleId, { now: new Date(released), releasedAt: new Date(released) });
@@ -126,10 +129,16 @@ test("ordinary selected articles do not create individual WeChat deliveries", as
   assert.equal((await sql`SELECT 1 FROM deliveries WHERE target_key=${TARGET} AND subject_kind='selected' AND subject_id=${id}`).length, 0);
 });
 
-test("empty catch-up sends nothing and saves only the two latest due editions", async () => {
+test("empty catch-up sends one notice per channel, no models, and only the latest due editions", async () => {
+  const [before] = await sql`SELECT count(*)::int AS count FROM receipts`;
   const results = await catchUpDaily(new Date("2021-05-21T01:00:00Z"));
   assert.deepEqual(results.map((r) => [r.channel,r.key]), [["ai","2021-05-21"],["stock","2021-05-20"]]);
-  assert.ok(results.every((r) => r.entries === 0 && r.deliveries.length === 0));
+  assert.ok(results.every((r) => r.entries === 0 && r.deliveries.filter(d => d.target === TARGET).length === 1));
+  assert.ok((await catchUpDaily(new Date("2021-05-21T01:00:00Z"))).every(r => r.deliveries.length === 0));
+  const deliveries = await sql`SELECT payload FROM deliveries WHERE target_key=${TARGET} AND subject_id IN ('ai:2021-05-21','stock:2021-05-20')`;
+  assert.equal(deliveries.length, 2);
+  assert.ok(deliveries.every(d => d.payload.summary.includes("本期暂无新增精选")));
+  assert.equal((await sql`SELECT count(*)::int AS count FROM receipts`)[0].count, before.count);
 });
 
 test("personal deployment registers only the two daily slots and latest-edition recovery", async () => {
@@ -315,6 +324,84 @@ test("page delivery counts the same frozen edition as reading, including members
     assert.equal((await pushDaily("stock", now, "morning")).deliveries.length, 0);
   } finally {
     await sql`UPDATE notify_targets SET enabled_at=${target.enabled_at} WHERE key=${TARGET}`;
+    if (mode === undefined) delete process.env.WECHAT_DAILY_MODE; else process.env.WECHAT_DAILY_MODE = mode;
+    if (base === undefined) delete process.env.DAILY_PUBLIC_BASE_URL; else process.env.DAILY_PUBLIC_BASE_URL = base;
+  }
+});
+
+test("dated reading separates original, collection and inclusion times and identifies delayed analysis", async () => {
+  const delayed = await article("旧稿补分析", "ai-models", "2024-07-01T23:50:00Z", "2024-07-02T02:30:00Z", "2024-07-01T04:00:00Z");
+  await article("本期新稿", "ai-models", "2024-07-02T02:00:00Z", "2024-07-02T02:01:00Z", "2024-07-02T01:00:00Z");
+  await article("本期采集的较早原文", "ai-models", "2024-07-02T02:02:00Z", "2024-07-02T02:03:00Z", "2024-07-01T04:00:00Z");
+  await article("没有原文日期", "ai-models", "2024-07-02T02:04:00Z", "2024-07-02T02:05:00Z", null);
+  const now = new Date("2024-07-02T12:00:00Z");
+  const preview = await previewDaily("ai", now, undefined, "evening");
+  const candidate = preview.entries.find(e => e.itemId === delayed)!;
+  assert.equal(candidate.originalPublishedAt, "2024-07-01T04:00:00.000Z");
+  assert.equal(candidate.discoveredAt, "2024-07-01T23:50:00.000Z");
+  assert.equal(candidate.includedAt, "2024-07-02T02:30:00.000Z");
+  assert.equal(candidate.delayedAnalysis, true);
+  await pushDaily("ai", now, "evening");
+  const report = (await loadPersonalDaily("ai", "2024-07-02", now, undefined, "evening"))!;
+  const entry = report.entries.find(e => e.title === "旧稿补分析")!;
+  assert.equal(entry.publishedAt, candidate.originalPublishedAt);
+  assert.equal(entry.discoveredAt, candidate.discoveredAt);
+  assert.equal(entry.includedAt, candidate.includedAt);
+  assert.equal(entry.delayedAnalysis, true);
+  assert.equal(report.entries.find(e => e.title === "本期新稿")!.delayedAnalysis, false);
+  assert.equal(report.entries.find(e => e.title === "本期采集的较早原文")!.delayedAnalysis, false);
+  assert.equal(report.entries.find(e => e.title === "没有原文日期")!.publishedAt, null);
+  const html = renderDaily(report);
+  assert.ok(html.includes("原文发布时间 2024-07-01 12:00"));
+  assert.ok(html.includes("采集时间 2024-07-02 07:50"));
+  assert.ok(html.includes("收录时间 2024-07-02 10:30"));
+  assert.equal((html.match(/跨期补分析/g) ?? []).length, 1);
+  assert.ok(html.includes("较早发布 · 本期收录"));
+  assert.ok(html.includes("原文发布时间 信源未提供"));
+});
+
+test("a previously populated edition becoming withdrawn does not send a no-news notice", async () => {
+  const mode = process.env.WECHAT_DAILY_MODE, base = process.env.DAILY_PUBLIC_BASE_URL;
+  const now = new Date("2024-07-03T12:00:00Z");
+  const id = await article("待撤回事件", "ai-models", "2024-07-03T02:00:00Z");
+  try {
+    process.env.WECHAT_DAILY_MODE = "page";
+    delete process.env.DAILY_PUBLIC_BASE_URL;
+    assert.equal((await pushDaily("ai", now, "evening")).deliveries.length, 0);
+    await sql`UPDATE publications SET visibility='withdrawn' WHERE article_id=${id}`;
+    process.env.DAILY_PUBLIC_BASE_URL = "https://news.example.com";
+    const result = await pushDaily("ai", now, "evening");
+    assert.equal(result.entries, 0);
+    assert.equal(result.deliveries.length, 0);
+    assert.equal((await listPersonalDailies("ai", now)).some(e => e.key === "2024-07-03"), false);
+  } finally {
+    if (mode === undefined) delete process.env.WECHAT_DAILY_MODE; else process.env.WECHAT_DAILY_MODE = mode;
+    if (base === undefined) delete process.env.DAILY_PUBLIC_BASE_URL; else process.env.DAILY_PUBLIC_BASE_URL = base;
+  }
+});
+
+test("page-mode empty editions send one short card per channel and remain idempotent", async () => {
+  const mode = process.env.WECHAT_DAILY_MODE, base = process.env.DAILY_PUBLIC_BASE_URL;
+  const now = new Date("2024-07-04T00:00:00Z");
+  const [before] = await sql`SELECT count(*)::int AS count FROM receipts`;
+  try {
+    process.env.WECHAT_DAILY_MODE = "page";
+    process.env.DAILY_PUBLIC_BASE_URL = "https://news.example.com";
+    for (const channel of ["ai", "stock"] as const) {
+      const first = await pushDaily(channel, now, "morning");
+      assert.equal(first.entries, 0);
+      assert.equal(first.deliveries.filter(d => d.target === TARGET).length, 1);
+      assert.equal((await pushDaily(channel, now, "morning")).deliveries.length, 0);
+      const [delivery] = await sql`SELECT payload FROM deliveries WHERE target_key=${TARGET} AND subject_id=${`${channel}:2024-07-04:morning`}`;
+      assert.ok(delivery.payload.summary.includes("本期暂无新增精选"));
+      assert.equal(delivery.payload.url, `https://news.example.com/daily/${channel}/2024-07-04/morning`);
+      const readable = (await loadPersonalDaily(channel, "2024-07-04", now, undefined, "morning"))!;
+      assert.equal(readable.noNewSelection, true);
+      assert.equal(readable.entries.length, 0);
+    }
+    assert.equal((await sql`SELECT count(*)::int AS count FROM receipts`)[0].count, before.count);
+  } finally {
+    await sql`DELETE FROM notification_reports WHERE key='2024-07-04:morning'`;
     if (mode === undefined) delete process.env.WECHAT_DAILY_MODE; else process.env.WECHAT_DAILY_MODE = mode;
     if (base === undefined) delete process.env.DAILY_PUBLIC_BASE_URL; else process.env.DAILY_PUBLIC_BASE_URL = base;
   }

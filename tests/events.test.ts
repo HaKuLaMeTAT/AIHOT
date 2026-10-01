@@ -48,7 +48,9 @@ process.env.GROUP_REVIEW_MODEL = "deepseek-flash";
 let storyId: number;
 let factId: number;
 
-const randomText = () => Array.from({ length: 16 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+// Unrelated fixtures must share no bigrams: the local judge accepts every recalled candidate.
+let textSequence = 0;
+const distinctText = () => String.fromCharCode(65 + textSequence++).repeat(16);
 
 async function report(suffix: string, title = FACT_TITLE, summary = "摘要", publishedAt = new Date()) {
   const { articleId } = await upsertMaterial({
@@ -149,7 +151,7 @@ test("a report waiting for a regroup is not evidence for others, and its own tur
   hold = gate();
   hold.open();
   // Text no other report shares (the test database may keep rows of earlier runs; recall is lexical here).
-  const text = Array.from({ length: 16 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+  const text = distinctText();
   const waiting = await report("waiting", text, text);
   const [story] = await sql<{ id: number }[]>`INSERT INTO stories (public_id, title, first_report_at, latest_at) VALUES (${randomUUID()}, ${text}, now(), now()) RETURNING id`;
   const [fact] = await sql<{ id: number }[]>`INSERT INTO facts (public_id, story_id, title) VALUES (${`fw-${T}`}, ${story!.id}, ${text}) RETURNING id`;
@@ -177,7 +179,7 @@ test("a report waiting for a regroup is not evidence for others, and its own tur
 test("a development attaches to the story's earliest fact that still holds reports", async () => {
   hold = gate();
   hold.open();
-  const text = Array.from({ length: 16 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+  const text = distinctText();
   // A story whose first fact was emptied (a regroup, a detach, or a merge carried it over).
   const [story] = await sql<{ id: number }[]>`INSERT INTO stories (public_id, title, first_report_at, latest_at) VALUES (${randomUUID()}, ${text}, now(), now()) RETURNING id`;
   await sql`INSERT INTO facts (public_id, story_id, title) VALUES (${`fe-${T}`}, ${story!.id}, 'emptied')`;
@@ -209,7 +211,7 @@ async function storyWithRoot(text: string, suffix: string) {
 test("a story's root is the fact reported first, not the one with the lowest number", async () => {
   hold = gate();
   hold.open();
-  const early = randomText(), late = randomText();
+  const early = distinctText(), late = distinctText();
   const [story] = await sql<{ id: number }[]>`INSERT INTO stories (public_id, title, first_report_at, latest_at) VALUES (${randomUUID()}, ${early}, now(), now()) RETURNING id`;
   // Created first (lower id), reported later: a fact carried over from a merged or imported story.
   const [later] = await sql<{ id: number }[]>`INSERT INTO facts (public_id, story_id, title) VALUES (${`ft-late-${T}`}, ${story!.id}, ${late}) RETURNING id`;
@@ -231,7 +233,7 @@ test("a story's root is the fact reported first, not the one with the lowest num
 test("two stories a report ties together merge when both models see one story in their roots", async () => {
   hold = gate();
   hold.open();
-  const text = randomText();
+  const text = distinctText();
   const older = await storyWithRoot(`${text}甲`, "older");
   const newer = await storyWithRoot(`${text}乙`, "newer");
   relation = "SAME_STORY";
@@ -254,7 +256,7 @@ test("two stories a report ties together merge when both models see one story in
 test("two stories stay apart when their roots are different events, whatever the report ties them with", async () => {
   hold = gate();
   hold.open();
-  const text = randomText();
+  const text = distinctText();
   const one = await storyWithRoot(`${text}甲`, "one");
   const two = await storyWithRoot(`${text}乙`, "two");
   relation = "SAME_STORY";
@@ -275,10 +277,10 @@ test("two stories stay apart when their roots are different events, whatever the
 test("a story whose reports all moved away keeps its address: it redirects to where the last one went", async () => {
   hold = gate();
   hold.open();
-  const text = randomText();
+  const text = distinctText();
   const old = await storyWithRoot(text, "moving");
   // A second report of the old story, about something no other report mentions.
-  const other = randomText();
+  const other = distinctText();
   const staying = await report("staying", other, other);
   await sql`INSERT INTO fact_articles (fact_id, article_id, role) VALUES (${old.factId}, ${staying}, 'report')`;
   const target = await storyWithRoot(text, "target");
@@ -300,7 +302,7 @@ test("a story whose reports all moved away keeps its address: it redirects to wh
 test("stories that reports keep tying together without merging list each other as related", async () => {
   hold = gate();
   hold.open();
-  const text = randomText();
+  const text = distinctText();
   const one = await storyWithRoot(`${text}甲`, "related-one");
   const two = await storyWithRoot(`${text}乙`, "related-two");
   const links = async () =>

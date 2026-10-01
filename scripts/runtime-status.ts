@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runtimeIssues } from "./runtime-health.ts";
+import { announcementUsage } from "@aihot/backend/sources/stock";
 
 const json = process.argv.includes("--json");
 const now = Date.now();
@@ -45,6 +46,7 @@ try {
     WHERE day >= to_char(now() AT TIME ZONE 'Asia/Shanghai' - interval '1 day','YYYY-MM-DD') GROUP BY source_id,day ORDER BY day,source_id`;
   const stockScans = await sql`SELECT source_id,day,next_page,expected_count,complete FROM stock_announcement_scans
     WHERE day >= to_char(now() AT TIME ZONE 'Asia/Shanghai' - interval '1 day','YYYY-MM-DD') ORDER BY day,source_id`;
+  const stockDocumentUsage = await announcementUsage(new Date(now));
   const stockEvents = await sql`SELECT day,count(*)::int AS observations FROM stock_market_events
     WHERE day=to_char(now() AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') GROUP BY day`;
   const [heartbeat] = await sql<{ at: string }[]>`SELECT value->>'at' AS at FROM settings WHERE key='heartbeat.worker'`;
@@ -60,7 +62,7 @@ try {
   if (recentDeliveries.some((d) => d.wechat_delivery_status && d.wechat_delivery_status !== "success")) issues.push("微信平台回执报告投递失败");
   if (process.env.WECHAT_DAILY_MODE === "page" && !process.env.DAILY_PUBLIC_BASE_URL) issues.push("正式日报阅读地址待配置，日报暂不发送");
   if (process.env.WECHAT_SEPARATE_TEMPLATES === "true" && ["WECHAT_AI_DAILY_TEMPLATE_ID", "WECHAT_STOCK_DAILY_TEMPLATE_ID", "WECHAT_URGENT_TEMPLATE_ID"].some((k) => !process.env[k])) issues.push("三个业务模板尚未配置完整，相关推送等待接入");
-  if (json) console.log(JSON.stringify({ services, memory, api, heartbeat: heartbeat?.at, operations, issues, recentDeliveries, model: { provider: process.env.LLM_PROVIDER || "api", name: process.env.LLM_PROVIDER === "codex" ? process.env.CODEX_MODEL : process.env.LLM_MODEL }, collectionEnabled: process.env.COLLECT_ENABLED !== "false", modelCallsEnabled: process.env.MODEL_CALLS_ENABLED !== "false", sources, articles, budgets, calls, channelCalls, analysisQueues, notify, failures, stockIndexes, stockScans, stockEvents }, null, 2));
+  if (json) console.log(JSON.stringify({ services, memory, api, heartbeat: heartbeat?.at, operations, issues, recentDeliveries, model: { provider: process.env.LLM_PROVIDER || "api", name: process.env.LLM_PROVIDER === "codex" ? process.env.CODEX_MODEL : process.env.LLM_MODEL }, collectionEnabled: process.env.COLLECT_ENABLED !== "false", modelCallsEnabled: process.env.MODEL_CALLS_ENABLED !== "false", sources, articles, budgets, calls, channelCalls, analysisQueues, notify, failures, stockIndexes, stockScans, stockEvents, stockDocumentUsage }, null, 2));
   else {
     console.log(`个人热点服务状态 · ${stamp(now)}`);
     console.log(`总体：${issues.length ? "需要关注" : "运行正常（当前检查通过）"}`);
@@ -80,7 +82,8 @@ try {
       }
     }
     const enabled = config.wechatPushEnabled && notify.some((t) => t.enabled);
-    console.log(`微信：${enabled ? "已开启" : "未开启"}；${process.env.PERSONAL_DAILY_TWICE_ENABLED === "true" ? "AI 与股市均为 08:00 早报、20:00 晚报" : "AI 每天 08:00、股市每天 18:00"}（北京时间，无新增精选不发）`);
+    console.log(`微信：${enabled ? "已开启" : "未开启"}；${process.env.PERSONAL_DAILY_TWICE_ENABLED === "true" ? "AI 与股市均为 08:00 早报、20:00 晚报" : "AI 每天 08:00、股市每天 18:00"}（北京时间，无新增精选也发提示）`);
+    console.log(`公告阅读：本窗口 ${stockDocumentUsage.windowUsed}/${stockDocumentUsage.windowLimit}；滚动 24h ${stockDocumentUsage.rollingUsed}/${stockDocumentUsage.rollingLimit}（含失败尝试）`);
     if (process.env.WECHAT_DAILY_MODE === "page") console.log(`日报格式：概览卡片＋完整阅读页；访问地址=${process.env.DAILY_PUBLIC_BASE_URL ? "已填写（手机可达性仍需验证）" : "待配置，日报暂不发送"}`);
     if (process.env.WECHAT_SEPARATE_TEMPLATES === "true") console.log(`分用途模板：AI 日报=${process.env.WECHAT_AI_DAILY_TEMPLATE_ID ? "已填" : "待填"}；股市日报=${process.env.WECHAT_STOCK_DAILY_TEMPLATE_ID ? "已填" : "待填"}；即时/运行提醒=${process.env.WECHAT_URGENT_TEMPLATE_ID ? "已填" : "待填"}`);
     const last = recentDeliveries[0];

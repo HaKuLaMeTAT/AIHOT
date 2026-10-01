@@ -3,7 +3,7 @@ import { freemem } from "node:os";
 import { STOCK } from "@aihot/industry/stock";
 import { beijingDate, beijingMidnight, beijingTime } from "@aihot/contracts/time";
 import { config } from "../config.ts";
-import { sql } from "../db.ts";
+import { sql, type Db } from "../db.ts";
 import { upsertMaterial } from "../content/materials.ts";
 import { extractStockPdf } from "../content/stock-pdf.ts";
 import { queueProcessing } from "../jobs/content.ts";
@@ -12,24 +12,39 @@ import { collectMarket, MARKET_SOURCE } from "./stock-market.ts";
 
 interface IndexedAnnouncement { id: string; source_id: string; title: string; name: string; code: string; pdf_url: string; published_at: Date }
 
+/** Reading quotas share the report boundaries; midnight does not reset the rolling limit. */
+export async function announcementUsage(now = new Date(), db: Db = sql) {
+  const midnight = beijingMidnight(beijingDate(now)).getTime();
+  const hour = (now.getTime() - midnight) / 3600_000;
+  const windowStart = new Date(midnight + (hour >= 20 ? 20 : hour >= 8 ? 8 : -4) * 3600_000);
+  const windowEnd = new Date(windowStart.getTime() + 12 * 3600_000);
+  const rollingStart = new Date(now.getTime() - 24 * 3600_000);
+  const [used] = await db<{ window: number; rolling: number }[]>`SELECT
+    count(*) FILTER(WHERE promoted_at >= ${windowStart})::int AS window,count(*)::int AS rolling
+    FROM stock_announcements WHERE promoted_at > ${rollingStart} AND promoted_at < ${windowEnd}`;
+  return { windowStart, windowEnd, windowUsed: used.window, rollingUsed: used.rolling,
+    windowLimit: STOCK.announcementsPerWindow, rollingLimit: STOCK.announcementsPerDay };
+}
+
 export async function promoteAnnouncement(now = new Date(), extractor: (url: string) => Promise<string> = extractStockPdf) {
   if (!config.modelCallsEnabled) return { status: "skipped", reason: "model calls disabled" };
-  // Reserve PDF attempts atomically, including failures, so the five-document cap bounds real work.
-  const day = beijingDate(now), start = beijingMidnight(day);
+  // Reserve real attempts under one lock, so failures and simultaneous dispatches share the cap.
+  const oldest = new Date(now.getTime() - STOCK.announcementLookbackHours * 3600_000);
   await sql`UPDATE stock_announcements SET state='failed',error='interrupted PDF preparation; index retained'
     WHERE state='preparing' AND updated_at < ${new Date(now.getTime()-30*60_000)}`;
   const r = await sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext('stock_document_dispatch'))`;
-    const [count] = await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM stock_announcements WHERE promoted_at >= ${start}`;
-    if (count.n >= STOCK.announcementsPerDay) return null;
+    const used = await announcementUsage(now, tx);
+    if (used.windowUsed >= used.windowLimit || used.rollingUsed >= used.rollingLimit) return null;
     const [row] = await tx<IndexedAnnouncement[]>`SELECT a.id,a.source_id,a.title,a.name,a.code,a.pdf_url,a.published_at
       FROM stock_announcements a JOIN sources s ON s.id=a.source_id
-      WHERE a.state='indexed' AND NOT a.baseline AND a.priority>0 AND a.day=${day} AND s.enabled AND s.participation_mode='editorial'
-      ORDER BY a.priority DESC,a.published_at DESC LIMIT 1 FOR UPDATE OF a`;
+      WHERE a.state='indexed' AND NOT a.baseline AND a.priority>0 AND a.published_at >= ${oldest} AND a.published_at <= ${now}
+        AND s.enabled AND s.participation_mode='editorial'
+      ORDER BY a.priority DESC,a.published_at DESC,a.id LIMIT 1 FOR UPDATE OF a`;
     if (row) await tx`UPDATE stock_announcements SET state='preparing',promoted_at=${now},updated_at=${now} WHERE id=${row.id}`;
     return row ?? null;
   });
-  if (!r) return { status: "skipped", reason: "no candidate or daily document limit" };
+  if (!r) return { status: "skipped", reason: "no recent candidate or document quota reached" };
   try {
     const body = await extractor(r.pdf_url);
     const material = await upsertMaterial({ sourceId: r.source_id, url: r.pdf_url, title: `${r.name}（${r.code}）：${r.title}`,

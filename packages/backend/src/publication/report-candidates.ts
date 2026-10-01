@@ -19,6 +19,10 @@ export interface ReportEntry {
 export interface Candidate extends ReportEntry {
   category: string | null;
   factKey: string;
+  originalPublishedAt?: string | null;
+  discoveredAt?: string;
+  includedAt?: string;
+  delayedAnalysis?: boolean;
   relatedEntries?: Candidate[];
 }
 
@@ -59,9 +63,11 @@ export async function candidates(start: Date, end: Date, discoveredAfter?: Date,
     return tx<{
       id: string; title: string; summary: string | null; url: string; category: string | null; score: number | null; first_party: boolean;
       source_id: string; source_name: string; source_kind: string; fact_public_id: string | null; story_public_id: string | null; at: Date; backfill: boolean;
+      published_at: Date | null; discovered_at: Date; included_at: Date;
     }[]>`
       SELECT p.article_id AS id, p.title, p.summary, p.url, p.category, p.score, p.first_party, s.id AS source_id, s.name AS source_name,
-             s.kind AS source_kind, f.public_id AS fact_public_id, st.public_id::text AS story_public_id, p.timeline_at AS at, p.backfill
+             s.kind AS source_kind, f.public_id AS fact_public_id, st.public_id::text AS story_public_id, p.timeline_at AS at, p.backfill,
+             p.published_at,p.discovered_at,greatest(p.timeline_at,p.visible_after) AS included_at
       FROM publications p JOIN sources s ON s.id = p.source_id
       LEFT JOIN editorial_overrides o ON o.article_id = p.article_id
       LEFT JOIN facts f ON f.id = p.fact_id LEFT JOIN stories st ON st.id = f.story_id
@@ -82,6 +88,8 @@ export async function candidates(start: Date, end: Date, discoveredAfter?: Date,
       itemId: r.id, factId: r.fact_public_id, storyPublicId: r.story_public_id, title: r.title, summary: r.summary ?? "",
       sourceName: r.source_name, sourceUrl: r.url, sourceId: r.source_id, firstParty: r.first_party, role: roleOf(r.source_kind, r.first_party),
       score: r.score === null ? null : Number(r.score), publishedAt: r.at.toISOString(), category: r.category, factKey: key,
+      originalPublishedAt: r.published_at?.toISOString() ?? null, discoveredAt: r.discovered_at.toISOString(),
+      includedAt: r.included_at.toISOString(), delayedAnalysis: !r.backfill && r.discovered_at < start && r.included_at >= start,
     };
     const prev = byFact.get(key);
     if (!prev || Number(c.firstParty) - Number(prev.firstParty) > 0 || (c.firstParty === prev.firstParty && (c.score ?? 0) > (prev.score ?? 0))) byFact.set(key, c);

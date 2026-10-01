@@ -1,6 +1,8 @@
 // Personal collection policy; these ranks only select documents to READ, not scores for publication.
 export const STOCK = {
-  announcementsPerDay: 5,
+  announcementsPerDay: 24, // Rolling 24 hours, including failed attempts.
+  announcementsPerWindow: 12, // Each Beijing 20:00–08:00 / 08:00–20:00 window.
+  announcementLookbackHours: 72,
   announcementPagesPerRun: 6,
   indexRetentionDays: 30,
   eventRetentionDays: 7,

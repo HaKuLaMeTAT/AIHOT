@@ -10,7 +10,10 @@ export interface DailyEntry {
   category: string | null;
   sourceName: string;
   sourceUrl: string;
-  publishedAt: string;
+  publishedAt: string | null;
+  discoveredAt?: string;
+  includedAt?: string;
+  delayedAnalysis?: boolean;
   relatedEntries?: DailyEntry[];
 }
 export interface PersonalDaily {
@@ -22,6 +25,7 @@ export interface PersonalDaily {
   manualSupplement?: boolean;
   supplement?: string;
   edition?: DailyEdition;
+  noNewSelection?: boolean;
 }
 
 interface EditionItem { itemId: string; relatedEntries?: EditionItem[] }
@@ -34,7 +38,8 @@ function memberIds(entries: EditionItem[]): string[] {
 
 function dailyEntry(entry: Candidate): DailyEntry {
   return { title: entry.title, summary: entry.summary, category: entry.category, sourceName: entry.sourceName,
-    sourceUrl: entry.sourceUrl, publishedAt: entry.publishedAt,
+    sourceUrl: entry.sourceUrl, publishedAt: entry.originalPublishedAt ?? null,
+    discoveredAt: entry.discoveredAt, includedAt: entry.includedAt, delayedAnalysis: entry.delayedAnalysis,
     ...(entry.relatedEntries?.length ? { relatedEntries: entry.relatedEntries.map(dailyEntry) } : {}) };
 }
 
@@ -52,7 +57,7 @@ export async function listPersonalDailies(channel: string, now = new Date(), lim
     if (!key || !isValidDate(key) || (edition && !validDailyEdition(edition))) continue;
     const add = async (supplement?: string) => {
       const report = await loadPersonalDaily(channel, key, now, supplement, edition);
-      if (!report?.entries.length) return;
+      if (!report || (!report.entries.length && !report.noNewSelection)) return;
       entries.push({ channel, key, ...(edition ? { edition: edition as DailyEdition } : {}), ...(supplement ? { supplement } : {}),
         windowEnd: report.windowEnd, count: report.entries.length,
         path: `/daily/${channel}/${key}${supplement ? `/supplement/${supplement}` : edition ? `/${edition}` : ""}` });
@@ -84,10 +89,11 @@ export async function loadPersonalDailyCandidates(channel: string, key: string, 
   const manualSupplement = content.kind === "manual_supplement";
   const ids = memberIds(content.entries);
   const rows = ids.length ? await sql<{ id: string; title: string; summary: string | null; category: string | null; source_name: string; url: string; at: Date;
-    source_id: string; first_party: boolean; score: number | null; fact_id: string | null; story_id: string | null }[]>`
+    source_id: string; first_party: boolean; score: number | null; fact_id: string | null; story_id: string | null;
+    published_at: Date | null; discovered_at: Date; included_at: Date }[]>`
     SELECT p.article_id AS id,p.title,p.summary,p.category,s.name AS source_name,p.url,s.id AS source_id,p.first_party,p.score,
       f.public_id AS fact_id,st.public_id::text AS story_id,
-      CASE WHEN ${manualSupplement} THEN coalesce(p.published_at,p.timeline_at) ELSE p.timeline_at END AS at
+      p.timeline_at AS at,p.published_at,p.discovered_at,greatest(p.timeline_at,p.visible_after) AS included_at
     FROM publications p JOIN sources s ON s.id=p.source_id LEFT JOIN editorial_overrides o ON o.article_id=p.article_id
     LEFT JOIN facts f ON f.id=p.fact_id LEFT JOIN stories st ON st.id=f.story_id
     WHERE p.article_id IN ${sql(ids)} AND p.visibility='public' AND p.eligible AND p.selected AND (NOT p.backfill OR ${manualSupplement})
@@ -96,11 +102,14 @@ export async function loadPersonalDailyCandidates(channel: string, key: string, 
   const members: Candidate[] = ids.flatMap(id => { const r = byId.get(id); return r ? [{ itemId: r.id, title: r.title, summary: r.summary ?? "",
     category: r.category, sourceName: r.source_name, sourceUrl: r.url, sourceId: r.source_id, firstParty: r.first_party,
     role: r.first_party ? "官方" : "媒体", score: r.score, publishedAt: r.at.toISOString(), factId: r.fact_id,
+    originalPublishedAt: r.published_at?.toISOString() ?? null, discoveredAt: r.discovered_at.toISOString(),
+    includedAt: r.included_at.toISOString(), delayedAnalysis: !manualSupplement && r.discovered_at < start && r.included_at >= start,
     storyPublicId: r.story_id, factKey: r.fact_id ?? `a:${r.id}` }] : []; });
   return { channel, key, windowStart: start.toISOString(), windowEnd: end.toISOString(),
     ...(manualSupplement ? { manualSupplement: true } : {}),
     ...(supplement ? { supplement } : {}),
     ...(edition ? { edition } : {}),
+    ...(!manualSupplement && content.entries.length === 0 ? { noNewSelection: true } : {}),
     entries: personalEvents(members) };
 }
 

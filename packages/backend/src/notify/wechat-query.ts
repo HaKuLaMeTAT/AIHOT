@@ -5,6 +5,7 @@ import { config } from "../config.ts";
 import { listPersonalDailies } from "../publication/personal-daily.ts";
 import { dailyEditionLabel } from "@aihot/contracts/personal-daily";
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
+import { announcementUsage } from "../sources/stock.ts";
 
 const time = (date: Date | string | null | undefined) => date ? `${beijingDate(date)} ${beijingTime(date)}` : "暂无记录";
 
@@ -27,6 +28,7 @@ export async function wechatStatus(): Promise<string> {
     const [analysis] = await tx`SELECT max(created_at) AS at FROM analyses`;
     const queues = await tx`SELECT name,count(*) FILTER(WHERE state='active')::int AS active,count(*) FILTER(WHERE state IN('created','retry'))::int AS waiting
       FROM pgboss.job WHERE name IN('content.analyze.ai','content.analyze.stock','content.analyze') AND state IN('created','retry','active') GROUP BY name`;
+    const documents = await announcementUsage(new Date(), tx);
     const [delivery] = await tx`SELECT status,wechat_delivery_status,created_at FROM deliveries WHERE target_key='wechat-personal' ORDER BY id DESC LIMIT 1`;
     const fresh = heartbeat?.at && Math.abs(Date.now() - Date.parse(heartbeat.at)) <= 180_000;
     const queueText = (channel: string) => { const q = queues.find(q => q.name === `content.analyze.${channel}`); return `${q?.waiting ?? 0} 待处理／${q?.active ?? 0} 正在分析`; };
@@ -37,8 +39,9 @@ export async function wechatStatus(): Promise<string> {
     return [`个人热点状态 · ${time(new Date())}`, system, `Worker 心跳：${fresh ? "正常" : "缺失或过期"}`,
       `采集：${sources?.enabled ?? 0} 个来源，${sources?.failing ?? 0} 个最近失败；最近成功 ${time(fetch?.at)}`,
       `AI 队列：${queueText("ai")}`, `股市队列：${queueText("stock")}`, `最近分析：${time(analysis?.at)}`,
+      `公告阅读：本窗口 ${documents.windowUsed}/${documents.windowLimit}，滚动 24h ${documents.rollingUsed}/${documents.rollingLimit}（含失败尝试）`,
       `微信推送：${config.wechatPushEnabled ? "已开启" : "未开启"}；最近 ${time(delivery?.created_at)}，${state}`,
-      "早报 08:00／晚报 20:00（北京时间，无新增精选不发）。排队数量不等于故障。"].join("\n");
+      "早报 08:00／晚报 20:00（北京时间），无新增精选也发送提示。排队数量不等于故障。"].join("\n");
   }) as Promise<string>;
 }
 
@@ -54,5 +57,5 @@ export async function answerWechatQuery(command: string): Promise<string> {
   if (!channel) return "回复 AI 或 股市 查看最新日报；回复 历史 查看归档；回复 状态 查看服务和推送情况。查询只读取已有数据。";
   const [latest] = await listPersonalDailies(channel, new Date(), 1);
   if (!latest) return `${channel === "ai" ? "AI" : "股市"}暂无已生成且可显示的日报。`;
-  return `${channel === "ai" ? "AI" : "股市"}${dailyEditionLabel(latest.edition)}${latest.supplement ? " · 补充" : ""} · ${latest.key}\n精选 ${latest.count} 条，截止 ${time(latest.windowEnd)}\n${url(latest.path)}\n这是最近一期已生成内容，不会重新分析或补发通知。`;
+  return `${channel === "ai" ? "AI" : "股市"}${dailyEditionLabel(latest.edition)}${latest.supplement ? " · 补充" : ""} · ${latest.key}\n${latest.count ? `精选 ${latest.count} 条` : "本期暂无新增精选"}，截止 ${time(latest.windowEnd)}\n${url(latest.path)}\n这是最近一期已生成内容，不会重新分析或补发通知。`;
 }

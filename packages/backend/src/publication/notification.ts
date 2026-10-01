@@ -13,6 +13,7 @@ export interface SelectedNotification {
   source_name: string;
   url: string;
   timeline_at: Date;
+  published_at: Date | null;
   discovered_at: Date;
   visible_after: Date | null;
   backfill: boolean;
@@ -23,7 +24,7 @@ export interface SelectedNotification {
 export async function selectedNotification(articleId: string) {
   const [r] = await sql<SelectedNotification[]>`
     SELECT p.article_id, p.selected, p.visibility, p.title, p.summary, p.reason, p.category, s.name AS source_name, p.url,
-           p.timeline_at, p.discovered_at, p.visible_after, p.backfill, p.fact_id,
+           p.timeline_at, p.published_at, p.discovered_at, p.visible_after, p.backfill, p.fact_id,
            coalesce((o.fields->>'silent')::boolean, false) AS silent
     FROM publications p JOIN sources s ON s.id = p.source_id LEFT JOIN editorial_overrides o ON o.article_id = p.article_id
     WHERE p.article_id = ${articleId} AND p.eligible`;

@@ -30,8 +30,8 @@ function label(channel: DailyChannel, edition?: DailyEdition) {
 
 export function dailyPageMessage(channel: DailyChannel, key: string, count: number, end: Date, edition?: DailyEdition): WechatMessage | null {
   const url = dailyPageUrl(channel, key, edition);
-  if (!url || !count) return null;
-  return briefWechat({ title: `${label(channel, edition)} ${key}`, summary: `精选 ${count} 条，点击阅读全文`,
+  if (!url) return null;
+  return briefWechat({ title: `${label(channel, edition)} ${key}`, summary: count ? `精选 ${count} 条，点击阅读全文` : "本期暂无新增精选，点击查看",
     source: SITE.name, time: `${key} ${beijingTime(end)}`, url, template: channel === "ai" ? "ai_daily" : "stock_daily" });
 }
 
@@ -71,9 +71,10 @@ function parts(entries: Candidate[]): Candidate[][] {
 function message(channel: DailyChannel, key: string, entries: Candidate[], end: Date, part: number, total: number, count: number, edition?: DailyEdition): WechatMessage {
   return {
     title: `${label(channel, edition)}｜${key}${total > 1 ? `（${part}/${total}）` : ""}`,
-    summary: `过去 ${edition ? 12 : 24} 小时精选 ${count} 件事\n\n${entries.map(block).join("\n\n")}`,
+    summary: count ? `过去 ${edition ? 12 : 24} 小时收录精选 ${count} 件事\n\n${entries.map(block).join("\n\n")}` : "本期暂无新增精选事件。",
     source: `${SITE.name} · ${new Set(personalFacts(entries).map((e) => e.sourceId)).size} 个信源`,
     time: `${key} ${beijingTime(end)}（北京时间）`,
+    ...(count === 0 ? { template: channel === "ai" ? "ai_daily" as const : "stock_daily" as const } : {}),
     // A template has one whole-message jump. Multiple original links are included as plain text.
   };
 }
@@ -84,6 +85,7 @@ export function dailyMessages(channel: DailyChannel, key: string, entries: Candi
     const card = dailyPageMessage(channel, key, entries.length, end, edition);
     return card ? [card] : [];
   }
+  if (!entries.length) return [message(channel, key, [], end, 1, 1, 0, edition)];
   const groups = parts(entries);
   return groups.map((group, i) => message(channel, key, group, end, i + 1, groups.length, entries.length, edition));
 }
@@ -119,10 +121,13 @@ export async function pushDaily(channel: DailyChannel, now = new Date(), edition
   const deliveries: Array<{ target: string; status: string }> = [];
   for (const target of targets) {
     if (target.enabled_at && target.enabled_at >= window.end) continue;
+    // A withdrawn edition is not a newly empty report; never send it as an all-clear notice.
+    if (count === 0 && stored!.content.entries.length > 0) continue;
     // Preserve part identities after withdrawals, so a later retry cannot reshuffle already sent parts.
     const groups = parts(stored!.content.entries);
-    if (process.env.WECHAT_DAILY_MODE === "page") {
-      const payload = dailyPageMessage(channel, window.key, count, window.end, window.edition);
+    if (process.env.WECHAT_DAILY_MODE === "page" || groups.length === 0) {
+      const payload = process.env.WECHAT_DAILY_MODE === "page" ? dailyPageMessage(channel, window.key, count, window.end, window.edition)
+        : message(channel, window.key, [], window.end, 1, 1, 0, window.edition);
       // No address means no delivery reservation; configuring it later can send the latest due issue.
       if (!payload) continue;
       deliveries.push(...await deliverContent({ subjectKind: "daily_report", subjectId: `${channel}:${window.reportKey}`,

@@ -10,7 +10,7 @@ import { buildReadingApp } from "../apps/api/src/daily/app.ts";
 
 const source = `reading-${tag()}`;
 const app = buildReadingApp();
-after(async () => { await app.close(); await sql`DELETE FROM notification_reports WHERE channel='ai' AND key LIKE '2020-08-01%'`; await closeDb(); });
+after(async () => { await app.close(); await sql`DELETE FROM notification_reports WHERE channel='ai' AND key LIKE '2020-08-%'`; await closeDb(); });
 
 test("the reading listener exposes no admin or generic API, and previews are opt-in", async () => {
   for (const url of ["/admin", "/api/health", "/api/site/items", "/.env", "/daily/ai/2020-02-30", "/daily/other/2020-08-01"]) {
@@ -100,4 +100,26 @@ test("morning and evening reader addresses resolve independent stored editions",
   }
   assert.equal((await app.inject({ url: "/daily/ai/2020-08-01/night" })).statusCode, 404);
   assert.equal((await app.inject({ url: "/daily/ai/2020-08-02/morning" })).statusCode, 404);
+});
+
+test("a genuinely empty latest edition remains readable and appears in history and WeChat queries", async () => {
+  await sql`INSERT INTO notification_reports(channel,key,window_start,window_end,content)
+    VALUES('ai','2020-08-03:evening','2020-08-03T00:00:00Z','2020-08-03T12:00:00Z','{"entries":[]}')`;
+  const [before] = await sql`SELECT count(*)::int AS count FROM receipts`;
+  const response = await app.inject({ url: "/daily/ai/2020-08-03/evening" });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.body.includes("本期暂无新增精选事件"));
+  const latest = await app.inject({ url: "/daily/ai/latest" });
+  assert.equal(latest.statusCode, 302);
+  assert.equal(latest.headers.location, "/daily/ai/2020-08-03/evening");
+  assert.ok((await app.inject({ url: "/daily/ai/history" })).body.includes("本期暂无新增精选"));
+  const base = process.env.DAILY_PUBLIC_BASE_URL;
+  try {
+    process.env.DAILY_PUBLIC_BASE_URL = "https://news.example.com";
+    const { answerWechatQuery } = await import("@aihot/backend/notify/wechat-query");
+    const reply = await answerWechatQuery("AI");
+    assert.ok(reply.includes("本期暂无新增精选"));
+    assert.ok(reply.includes("/daily/ai/2020-08-03/evening"));
+  } finally { if (base === undefined) delete process.env.DAILY_PUBLIC_BASE_URL; else process.env.DAILY_PUBLIC_BASE_URL = base; }
+  assert.equal((await sql`SELECT count(*)::int AS count FROM receipts`)[0].count, before.count);
 });

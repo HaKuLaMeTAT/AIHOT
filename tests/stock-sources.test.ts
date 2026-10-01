@@ -6,7 +6,7 @@ import { config } from "@aihot/backend/config";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { announcementPage, collectAnnouncements, ANNOUNCEMENT_SOURCES } from "@aihot/backend/sources/stock-announcements";
 import { collectMarket, marketSession, quoteTimestamp, MARKET_SOURCE } from "@aihot/backend/sources/stock-market";
-import { promoteAnnouncement, composeMarketMaterial } from "@aihot/backend/sources/stock";
+import { promoteAnnouncement, composeMarketMaterial, announcementUsage } from "@aihot/backend/sources/stock";
 import { parseStockPdf } from "@aihot/backend/content/stock-pdf";
 import { STOCK } from "@aihot/industry/stock";
 import { processingPriority } from "@aihot/industry/processing";
@@ -148,16 +148,54 @@ test("market summary is created once and goes through normal editorial processin
  assert.equal((await sql`SELECT 1 FROM publications WHERE article_id=${result.articleId!}`).length,0);
 });
 
-test("five PDF attempts cap successes and failures without changing selection thresholds",async()=>{
- const d="2022-03-10",at=new Date(`${d}T10:00:00+08:00`);
- for(let i=0;i<8;i++)await sql`INSERT INTO stock_announcements(id,source_id,day,code,name,title,pdf_url,published_at,baseline,priority)
-  VALUES (${`${T}-${i}`},${ANNOUNCEMENT_SOURCES.sh},${d},'600001','公司','重大重组',${`https://static.cninfo.com.cn/finalpage/${d}/${i}.PDF`},${at},false,30)`;
+test("PDF quotas reserve both report windows, include failures, and never reset at midnight",async()=>{
+ const d="2022-03-10",at=new Date(`${d}T00:10:00+08:00`);
+ for(let i=0;i<32;i++)await sql`INSERT INTO stock_announcements(id,source_id,day,code,name,title,pdf_url,published_at,baseline,priority)
+  VALUES (${`${T}-quota-${i}`},${ANNOUNCEMENT_SOURCES.sh},${d},'600001','公司','重大重组',${`https://static.cninfo.com.cn/finalpage/${d}/${i}.PDF`},${at},false,30)`;
  let attempts=0;
  const fake=async()=>{attempts++;if(attempts===1)throw new Error("local PDF failure");return "原文证据".repeat(40);};
- for(let i=0;i<8;i++)await promoteAnnouncement(at,fake);
- assert.equal(attempts,5);
- const [counts]=await sql`SELECT count(*) FILTER (WHERE state='queued')::int AS queued,count(*) FILTER (WHERE state='failed')::int AS failed FROM stock_announcements WHERE day=${d}`;
- assert.equal(counts.queued,4);assert.equal(counts.failed,1);
+ for(let i=0;i<16;i++)await promoteAnnouncement(at,fake);
+ assert.equal(attempts,STOCK.announcementsPerWindow);
+ let used=await announcementUsage(at);
+ assert.equal(used.windowStart.toISOString(),"2022-03-09T12:00:00.000Z");
+ assert.equal(used.windowUsed,12);assert.equal(used.rollingUsed,12);
+ await promoteAnnouncement(new Date(`${d}T07:59:00+08:00`),fake);
+ assert.equal(attempts,12);
+ const morning=new Date(`${d}T08:00:00+08:00`);
+ await Promise.all(Array.from({length:16},()=>promoteAnnouncement(morning,fake)));
+ assert.equal(attempts,24,"concurrent dispatches cannot exceed the remaining quota");
+ used=await announcementUsage(morning);
+ assert.equal(used.windowUsed,12);assert.equal(used.rollingUsed,24);
+ const evening=new Date(`${d}T20:00:00+08:00`);
+ used=await announcementUsage(evening);
+ assert.equal(used.windowUsed,0);assert.equal(used.rollingUsed,24);
+ await promoteAnnouncement(evening,fake);
+ await promoteAnnouncement(new Date("2022-03-11T00:00:00+08:00"),fake);
+ assert.equal(attempts,24);
+ const next=new Date("2022-03-11T00:10:00+08:00");
+ assert.equal((await promoteAnnouncement(next,fake)).status,"queued");
+ assert.equal(attempts,25,"an unread previous-day candidate survives midnight when rolling room returns");
+ const [counts]=await sql`SELECT count(*) FILTER (WHERE state='queued')::int AS queued,count(*) FILTER (WHERE state='failed')::int AS failed FROM stock_announcements WHERE id LIKE ${`${T}-quota-%`}`;
+ assert.equal(counts.queued,24);assert.equal(counts.failed,1);
+});
+
+test("document dispatch keeps recent unread candidates, prioritizes major titles, and excludes stale, baseline and future indexes",async()=>{
+ const at=new Date("2022-03-16T10:00:00+08:00");
+ const fixtures=[
+  {key:"stale",at:"2022-03-13T09:59:00+08:00",baseline:false,priority:99},
+  {key:"baseline",at:"2022-03-16T09:00:00+08:00",baseline:true,priority:99},
+  {key:"future",at:"2022-03-16T10:01:00+08:00",baseline:false,priority:99},
+  {key:"recent-major",at:"2022-03-13T10:01:00+08:00",baseline:false,priority:30},
+  {key:"current",at:"2022-03-16T09:00:00+08:00",baseline:false,priority:20},
+ ];
+ for(const f of fixtures)await sql`INSERT INTO stock_announcements(id,source_id,day,code,name,title,pdf_url,published_at,baseline,priority)
+  VALUES(${`${T}-${f.key}`},${ANNOUNCEMENT_SOURCES.sh},${f.at.slice(0,10)},'600001','公司','重大公告',${`https://static.cninfo.com.cn/finalpage/${f.at.slice(0,10)}/${T}-${f.key}.PDF`},${new Date(f.at)},${f.baseline},${f.priority})`;
+ const fake=async()=>"原始公告依据".repeat(40);
+ assert.equal((await promoteAnnouncement(at,fake)).id,`${T}-recent-major`);
+ assert.equal((await promoteAnnouncement(at,fake)).id,`${T}-current`);
+ assert.equal((await promoteAnnouncement(at,fake)).status,"skipped");
+ const rows=await sql`SELECT state FROM stock_announcements WHERE id IN (${`${T}-stale`},${`${T}-baseline`},${`${T}-future`})`;
+ assert.ok(rows.every(r=>r.state==='indexed'));
 });
 
 test("isolated PDF parser extracts a local document and rejects non-PDF bytes",{skip: !process.env.STOCK_PDF_TEST_LIB},async()=>{
