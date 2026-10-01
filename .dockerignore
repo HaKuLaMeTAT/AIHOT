@@ -3,9 +3,18 @@ apps/web/node_modules
 apps/web/build
 apps/web/.react-router
 .data
+.runtime
+**/__pycache__
 .env
 .env.*
 !.env.example
 .git
 .github
 *.log
+
+# Local operator notes and credential files
+handoff
+.secrets
+*.key
+*.p12
+*.pfx

@@ -1,0 +1,16 @@
+[Unit]
+Description=Verified rotating local personal news backup
+PartOf=news-runtime.target
+After=news-db.service
+[Service]
+Type=oneshot
+Slice=news-runtime.slice
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+@STORAGE_GUARD@
+@STORAGE_LOG@
+ExecStart=/usr/bin/python3 @CONFIG@/runtime-ops.py backup --runtime @RUNTIME@ --config @CONFIG@
+ExecStopPost=-@NODEDIR@/node --env-file=@CONFIG@/env @RUNTIME@/app/scripts/notify-runtime.ts
+TimeoutStartSec=25min
+UMask=0077

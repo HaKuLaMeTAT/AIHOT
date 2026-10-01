@@ -20,13 +20,21 @@ export async function registerEventJobs(boss: PgBoss) {
       }
       return result;
     } catch (error) {
-      if (error instanceof BudgetExceededError || error instanceof ReceiptBusyError) throw error;
+      if (error instanceof BudgetExceededError || error instanceof ReceiptBusyError) {
+        await enqueue(QUEUES.group, job.data, { singletonKey: `budget:${job.id}`, startAfter: error instanceof BudgetExceededError ? error.retryAfterSeconds : 60 });
+        return { verdict: "waiting" };
+      }
       throw error;
     }
   });
   await ensureQueue(QUEUES.digest);
-  await boss.work<{ storyId: number; afterCorrection?: boolean }>(QUEUES.digest, { localConcurrency: 3, pollingIntervalSeconds: 5 }, async ([job]) => {
+  await boss.work<{ storyId: number; afterCorrection?: boolean }>(QUEUES.digest, { localConcurrency: Number(process.env.DIGEST_CONCURRENCY || 3), pollingIntervalSeconds: 5 }, async ([job]) => {
     if (!job) return;
-    return composeStoryDigest(job.data.storyId, { afterCorrection: job.data.afterCorrection });
+    try { return await composeStoryDigest(job.data.storyId, { afterCorrection: job.data.afterCorrection }); }
+    catch (error) {
+      if (!(error instanceof BudgetExceededError || error instanceof ReceiptBusyError)) throw error;
+      await enqueue(QUEUES.digest, job.data, { singletonKey: `budget:${job.id}`, startAfter: error instanceof BudgetExceededError ? error.retryAfterSeconds : 60 });
+      return { verdict: "waiting" };
+    }
   });
 }

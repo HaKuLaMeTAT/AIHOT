@@ -1,7 +1,7 @@
 
-【AI 领域翻译规则 — 本平台 100% 是 AI/ML/LLM 行业内容，严格遵守】
+【AI 与金融领域翻译规则 — 根据本篇原文语境判断】
 
-1. 歧义默认值：以下词在中文有非 AI 歧义，**一律按 AI 含义翻译**：
+1. 歧义默认值：以下词在中文有非 AI 歧义，在明确 AI 语境中按以下含义翻译，金融、法律、电力等语境按原文含义：
    - LLM = 大语言模型（绝不译"法学硕士"/"Master of Laws"）
    - Token / tokens = 模型 token（保留英文；绝不译"代币"/"令牌"）
    - Transformer = Transformer 架构（保留英文；不译"变压器"）
@@ -26,7 +26,7 @@
    - 模型版本号（举例 + 通用规则）：GPT-5 / Claude 4.7 / Claude Sonnet 4.6 / Llama 4 / Gemini 3 / o3 / o4 / DeepSeek-V4 / Qwen3.7
      **规则**：版本号一字不改（包括字母数字后缀如 4o / 4.7 / 405B / V4 / R1），绝不"翻译性扩写"（不要把 "405B" 译成 "4050 亿"，不要把 "V4" 译成 "第 4 代"）
    - 技术缩写（举例 + 通用规则）：LLM / RAG / RLHF / DPO / LoRA / QLoRA / PEFT / MoE / CoT / ReAct / KV cache / SOTA / AGI / MCP / ADK / NPU / GPU / TPU
-     **规则**：任何 2-5 字母的全大写缩写，默认按 AI/ML 含义保留英文
+     **规则**：AI/ML 技术缩写保留英文；金融缩写按金融语境理解
    - 评测基准（举例 + 通用规则）：MMLU / GPQA / HumanEval / SWE-bench / SWE-bench Verified / AIME / HLE / ARC-AGI / ARC-AGI 2 / MT-Bench / Chatbot Arena / Aider Polyglot / LiveCodeBench
      **规则**：以 -bench / -eval 结尾或全大写的评测名一律保留英文
    - AI 工具/产品：Cursor / Copilot / Codex / Aider / Devin / Cline / Claude Code / Windsurf / Zed / v0 / Bolt / Lovable / Replit Agent
@@ -43,3 +43,5 @@
    - URL 原样
    - 数字+单位：8k context / 175B params / 3.5x speedup / $3 per M tokens / 99.9%
    - 金额、参数量、比例、区间必须保留原文的阿拉伯数字和单位；不要把 $10B-$100B 改写成“数百亿至数千亿美元”等中文数量词
+
+5. 股市材料保留原始数字、币种、单位、报告期、同比或环比口径；EPS、PE、PB、IPO 等按金融语境理解。Token 在数字资产语境可指代币，Transformer 在电力语境可指变压器，Agent 在金融语境可指代理机构。不换算或补造未披露数字，不把公告日期冒充事件发生日期。

@@ -25,6 +25,8 @@ import { backupConfigured, runBackup } from "@aihot/backend/operations/backup";
 import { sourceHealthWeekly } from "@aihot/backend/operations/reports";
 import { markStalePendingReceipts } from "@aihot/backend/providers/receipts";
 import { markStaleDeliveries } from "@aihot/backend/notify/deliver";
+import { catchUpDaily, pushDaily } from "@aihot/backend/notify/daily";
+import { pollStockSources } from "@aihot/backend/sources/stock";
 
 interface Scheduled {
   name: string;
@@ -34,29 +36,42 @@ interface Scheduled {
 }
 
 const collecting = process.env.COLLECT_ENABLED !== "false";
+const personalReports = process.env.PERSONAL_REPORTS_ENABLED === "true";
 
 export const SCHEDULES: Scheduled[] = [
+  ...(collecting && process.env.STOCK_SOURCES_ENABLED === "true" ? [{ name: "stock.collect", cron: "*/5 * * * *", run: () => pollStockSources() }] : []),
   { name: "content.sweep", cron: "*/5 * * * *", run: sweepUnprocessed },
   // Full-text translations of newly selected items (model calls; off with MODEL_CALLS_ENABLED=false).
-  { name: "content.translate", cron: "*/5 * * * *", run: () => translatePending() },
+  ...(process.env.TRANSLATE_ENABLED !== "false" ? [{ name: "content.translate", cron: "*/5 * * * *", run: () => translatePending() }] : []),
   { name: "hot.rank", cron: "*/5 * * * *", run: () => computeHotRanking() },
   { name: "hot.snapshot", cron: "2 * * * *", run: () => snapshotHeat() },
   { name: "stories.status", cron: "7 * * * *", run: refreshStoryStatuses },
   { name: "stories.links", cron: "12 * * * *", run: linkRelatedStories },
-  { name: "reports.daily", cron: "0 8 * * *", missed: "once", run: () => composeDaily(beijingDate(Date.now())) },
-  { name: "reports.weekly", cron: "0 10 * * 1", missed: "once", run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
+  ...(personalReports ? [
+    ...(process.env.PERSONAL_DAILY_TWICE_ENABLED === "true" ? [
+    { name: "notify.ai-morning", cron: "0 8 * * *", run: () => pushDaily("ai", new Date(), "morning") },
+    { name: "notify.stock-morning", cron: "0 8 * * *", run: () => pushDaily("stock", new Date(), "morning") },
+    { name: "notify.ai-evening", cron: "0 20 * * *", run: () => pushDaily("ai", new Date(), "evening") },
+    { name: "notify.stock-evening", cron: "0 20 * * *", run: () => pushDaily("stock", new Date(), "evening") },
+    ] : [
+    { name: "notify.ai-daily", cron: "0 8 * * *", missed: "once" as const, run: () => pushDaily("ai") },
+    { name: "notify.stock-daily", cron: "0 18 * * *", missed: "once" as const, run: () => pushDaily("stock") },
+    ]),
+    { name: "notify.daily-catch-up", cron: "15 * * * *", run: () => catchUpDaily() },
+  ] : [{ name: "reports.daily", cron: "0 8 * * *", missed: "once" as const, run: () => composeDaily(beijingDate(Date.now())) }]),
+  ...(!personalReports ? [{ name: "reports.weekly", cron: "0 10 * * 1", missed: "once" as const, run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
   {
     name: "reports.monthly",
     cron: "30 10 1 * *",
-    missed: "once",
+    missed: "once" as const,
     run: () => {
       const [y, m] = beijingDate(Date.now()).split("-").map(Number) as [number, number];
       return composeMonthly(m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`);
     },
   },
-  { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() },
+  { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() }] : []),
   { name: "ops.retention", cron: "30 3 * * *", missed: "once", run: () => dailyRetention() },
-  { name: "sources.icons", cron: "40 4 * * *", missed: "once", run: () => refreshSourceIcons() },
+  ...(collecting && process.env.SOURCE_ICONS_ENABLED !== "false" ? [{ name: "sources.icons", cron: "40 4 * * *", missed: "once" as const, run: () => refreshSourceIcons() }] : []),
   // IndexNow for new indexable pages (off unless INDEXNOW_SUBMIT_ENABLED).
   { name: "seo.indexnow", cron: "50 5 * * *", missed: "once", run: () => submitIndexNow() },
   // Work a stopped process left half way becomes visible, and unknown paid requests get their one
@@ -81,7 +96,7 @@ export const SCHEDULES: Scheduled[] = [
   ...(collecting
     ? [
         { name: "sources.schedule", cron: "* * * * *", run: () => scheduleDueSources() },
-        { name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals },
+        ...(process.env.SOURCE_ADAPT_INTERVALS_ENABLED !== "false" ? [{ name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals }] : []),
         // WeChat official accounts (paid), each once per its interval.
         { name: "sources.mp-reconcile", cron: "*/15 * * * *", run: () => scheduleMpReconcile() },
       ]

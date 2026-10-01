@@ -3,7 +3,7 @@
 // report waiting for a regroup is not evidence for others until its own turn decides it again; a
 // story's root is its earliest fact that still holds reports; two stories a report ties together
 // merge only when both models see one story in their roots.
-import { gate, stub, tag } from "./setup.ts";
+import { enableLocalModelStub, gate, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
@@ -11,6 +11,7 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { detachFromFact } from "@aihot/backend/admin/content";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { groupArticle, linkRelatedStories } from "@aihot/backend/events/group";
+import { composeStoryDigest } from "@aihot/backend/events/digest";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { publishArticle } from "@aihot/backend/publication/publish";
 
@@ -60,6 +61,7 @@ async function report(suffix: string, title = FACT_TITLE, summary = "摘要", pu
 }
 
 before(async () => {
+  await enableLocalModelStub(provider.url);
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at) VALUES (${SOURCE}, 'Test events', 'rss', 'T1', 'editorial', '2100-01-01')`;
   // An existing fact with one report: the candidate every later report meets.
   const [story] = await sql<{ id: number }[]>`INSERT INTO stories (public_id, title, first_report_at, latest_at) VALUES (${randomUUID()}, ${FACT_TITLE}, now(), now()) RETURNING id`;
@@ -92,6 +94,17 @@ test("a detach made while the model is deciding the report's fact stands", async
   assert.equal(signals.length, 0, "no heat evidence is written back to the story");
   const [publication] = await sql<{ fact_id: number | null; story_id: number | null }[]>`SELECT fact_id, story_id FROM publications WHERE article_id = ${id}`;
   assert.deepEqual({ ...publication }, { fact_id: null, story_id: null }, "it is shown on its own");
+});
+
+test("personal digest switch preserves grouped reports without calling a model", async () => {
+  process.env.STORY_DIGEST_ENABLED = "false";
+  try {
+    const hits = provider.hits();
+    const before = await sql`SELECT article_id FROM fact_articles WHERE fact_id=${factId} ORDER BY article_id`;
+    assert.deepEqual(await composeStoryDigest(storyId), { updated: false });
+    assert.equal(provider.hits(), hits);
+    assert.deepEqual(await sql`SELECT article_id FROM fact_articles WHERE fact_id=${factId} ORDER BY article_id`, before);
+  } finally { delete process.env.STORY_DIGEST_ENABLED; }
 });
 
 test("a report joins the fact the model names, and a revision keeps that membership without asking again", async () => {
@@ -311,4 +324,31 @@ test("stories that reports keep tying together without merging list each other a
     pairRelation = null;
     answerAll = false;
   }
+});
+
+test("grouping and digests defer a stopped budget instead of exhausting short retries", async () => {
+  const { registerEventJobs } = await import("@aihot/backend/jobs/events");
+  const { QUEUES } = await import("@aihot/backend/jobs/queue");
+  type Job = { id: string; data: Record<string, unknown> };
+  const handlers = new Map<string, (jobs: Job[]) => Promise<unknown>>();
+  const fakeBoss = { work: async (name: string, _options: unknown, run: (jobs: Job[]) => Promise<unknown>) => { handlers.set(name, run); } };
+  await registerEventJobs(fakeBoss as unknown as import("pg-boss").PgBoss);
+  const groupId = await report("budget-group");
+  const digestArticle = await report("budget-digest");
+  const [story] = await sql<{ id: number }[]>`INSERT INTO stories(public_id,title,first_report_at,latest_at) VALUES(${randomUUID()},${FACT_TITLE},now(),now()) RETURNING id`;
+  const [fact] = await sql<{ id: number }[]>`INSERT INTO facts(public_id,story_id,title) VALUES(${randomUUID()},${story!.id},${FACT_TITLE}) RETURNING id`;
+  await sql`INSERT INTO fact_articles(fact_id,article_id,role) VALUES(${fact!.id},${digestArticle},'report')`;
+  const [budget] = await sql<{ per_minute: number }[]>`SELECT per_minute FROM budgets WHERE service='deepseek'`;
+  try {
+    await sql`UPDATE budgets SET per_minute=0 WHERE service='deepseek'`;
+    for (const [name, data] of [[QUEUES.group, {articleId:groupId}], [QUEUES.digest, {storyId:story!.id}]] as const) {
+      const id=randomUUID();
+      const result=await handlers.get(name)!([{id,data}]);
+      assert.deepEqual(result,{verdict:"waiting"});
+      const rows=await sql<{ name:string; data:unknown; start_after:Date }[]>`SELECT name,data,start_after FROM pgboss.job WHERE singleton_key=${`budget:${id}`}`;
+      assert.equal(rows.length,1);
+      assert.equal(rows[0]!.name,name);assert.deepEqual(rows[0]!.data,data);
+      assert.ok(rows[0]!.start_after.getTime()>Date.now()+50*60_000);
+    }
+  } finally { await sql`UPDATE budgets SET per_minute=${budget!.per_minute} WHERE service='deepseek'`; }
 });

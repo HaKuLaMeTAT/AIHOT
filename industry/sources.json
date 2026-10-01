@@ -1,5 +1,5 @@
 {
-  "$comment": "示范信源：首次启动时导入（scripts/seed.ts），已存在的不会被覆盖。之后在后台“信源”里增删改。字段说明见 docs/customize.md。",
+  "$comment": "个人热点：22 个 AI 信源、28 个股市信源。美股公司先覆盖 10 家科技/AI 公司，规则过滤 SEC 重大申报；论文和美股申报按来源限流，不改变模型总预算。external 股票来源由 stock.collect 专用任务采集。",
   "sources": [
     {
       "id": "rss-openai-news",
@@ -8,14 +8,14 @@
       "config": {
         "feedUrl": "https://openai.com/news/rss.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": "openai",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方"
       ],
@@ -29,14 +29,14 @@
       "config": {
         "feedUrl": "https://deepmind.google/blog/rss.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": "google",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方"
       ],
@@ -50,7 +50,7 @@
       "config": {
         "feedUrl": "https://research.google/blog/rss/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
@@ -72,14 +72,14 @@
       "config": {
         "feedUrl": "https://huggingface.co/blog/feed.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": "hugging-face",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方",
         "开源"
@@ -94,14 +94,14 @@
       "config": {
         "feedUrl": "https://www.microsoft.com/en-us/research/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": "microsoft",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方",
         "研究"
@@ -116,14 +116,14 @@
       "config": {
         "feedUrl": "https://blogs.nvidia.com/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": "nvidia",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方"
       ],
@@ -137,7 +137,7 @@
       "config": {
         "feedUrl": "https://aws.amazon.com/blogs/machine-learning/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
@@ -159,7 +159,7 @@
       "config": {
         "feedUrl": "https://github.blog/ai-and-ml/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
@@ -180,14 +180,14 @@
       "config": {
         "feedUrl": "https://mistral.ai/rss.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 30,
       "tags": [
         "官方"
       ],
@@ -201,7 +201,7 @@
       "config": {
         "feedUrl": "https://bair.berkeley.edu/blog/feed.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T1",
@@ -222,14 +222,14 @@
       "config": {
         "feedUrl": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 120,
       "tags": [
         "媒体"
       ],
@@ -243,14 +243,14 @@
       "config": {
         "feedUrl": "https://techcrunch.com/category/artificial-intelligence/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 120,
       "tags": [
         "媒体"
       ],
@@ -264,14 +264,14 @@
       "config": {
         "feedUrl": "https://arstechnica.com/ai/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 120,
       "tags": [
         "媒体"
       ],
@@ -285,7 +285,7 @@
       "config": {
         "feedUrl": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
@@ -306,14 +306,14 @@
       "config": {
         "feedUrl": "https://the-decoder.com/feed/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 120,
       "tags": [
         "媒体"
       ],
@@ -327,7 +327,7 @@
       "config": {
         "feedUrl": "https://simonwillison.net/atom/everything/",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
@@ -348,7 +348,7 @@
       "config": {
         "feedUrl": "https://importai.substack.com/feed",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
@@ -370,7 +370,7 @@
       "config": {
         "feedUrl": "https://www.latent.space/feed",
         "_aihot": {
-          "initialBackfillLimit": 8
+          "initialBackfillLimit": 2
         }
       },
       "tier": "T2",
@@ -380,6 +380,872 @@
       "interval_minutes": 180,
       "tags": [
         "个人"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-csrc-news",
+      "name": "中国证监会 · 要闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.csrc.gov.cn/csrc/index.shtml",
+        "itemSelector": "a[href*=\"/c100028/\"][href$=\"/content.shtml\"]",
+        "allowUrlPrefixes": [
+          "https://www.csrc.gov.cn/csrc/c100028/c"
+        ],
+        "detail": {
+          "maxFetches": 20,
+          "publishedAtRegex": "(202\\d[-年]\\d{1,2}[-月]\\d{1,2}日?)",
+          "publishedAtUtcOffset": "+08:00"
+        },
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方",
+        "A股",
+        "监管"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-sse-news",
+      "name": "上海证券交易所 · 要闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.sse.com.cn/aboutus/mediacenter/hotandd/",
+        "itemSelector": ".sse_list_1 dl dd",
+        "linkSelector": "a",
+        "publishedAtSelector": "span",
+        "allowUrlPrefixes": [
+          "https://www.sse.com.cn/aboutus/mediacenter/hotandd/c/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方",
+        "A股",
+        "交易所"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-szse-news",
+      "name": "深圳证券交易所 · 要闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.szse.cn/aboutus/trends/news/index.html",
+        "adapter": "szse_news",
+        "allowUrlPrefixes": [
+          "https://www.szse.cn/aboutus/trends/news/t"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方",
+        "A股",
+        "交易所"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-pboc-news",
+      "name": "中国人民银行 · 沟通交流",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/index.html",
+        "itemSelector": "td:has(font.newslist_style)",
+        "linkSelector": "font.newslist_style a",
+        "publishedAtSelector": ".hui12",
+        "allowUrlPrefixes": [
+          "https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方",
+        "A股",
+        "宏观"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-hkex-news",
+      "name": "香港交易所 · 新闻",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.hkex.com.hk/Services/RSS-Feeds/News-Releases?sc_lang=en",
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方",
+        "港股",
+        "交易所"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-hkex-regulatory",
+      "name": "香港交易所 · 监管公告",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.hkex.com.hk/Services/RSS-Feeds/regulatory-announcements?sc_lang=en",
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方",
+        "港股",
+        "监管"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-sec-news",
+      "name": "美国 SEC · 新闻",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.sec.gov/news/pressreleases.rss",
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方",
+        "美股",
+        "监管"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-fed-news",
+      "name": "美联储 · 公告",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.federalreserve.gov/feeds/press_all.xml",
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方",
+        "美股",
+        "宏观"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-cninfo-sh",
+      "name": "巨潮资讯 · 沪市公司公告",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 15,
+      "tags": [
+        "官方",
+        "A股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-cninfo-sz",
+      "name": "巨潮资讯 · 深市公司公告",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 15,
+      "tags": [
+        "官方",
+        "A股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-cninfo-bj",
+      "name": "巨潮资讯 · 北交所公司公告",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 15,
+      "tags": [
+        "官方",
+        "A股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-eastmoney-events",
+      "name": "东方财富 · 盘口与板块异动观察",
+      "kind": "external",
+      "config": {},
+      "tier": "T2",
+      "first_party": false,
+      "participation_mode": "editorial",
+      "interval_minutes": 5,
+      "tags": [
+        "A股",
+        "市场异动"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-anthropic-news",
+      "name": "Anthropic · 官方发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.anthropic.com/news",
+        "itemSelector": "a:has(time)",
+        "titleSelector": "h2,h3,[class*=\"__title\"]",
+        "publishedAtSelector": "time",
+        "publishedAtUtcOffset": "+00:00",
+        "allowUrlPrefixes": [
+          "https://www.anthropic.com/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "anthropic",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "web-deepseek-updates",
+      "name": "DeepSeek · 官方更新",
+      "kind": "web_list",
+      "config": {
+        "url": "https://api-docs.deepseek.com/updates",
+        "parseMode": "docusaurus_changelog",
+        "preserveUrlFragment": true,
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "deepseek",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "json-qwen-models",
+      "name": "Qwen · 官方模型发布",
+      "kind": "json_list",
+      "config": {
+        "url": "https://huggingface.co/api/models?author=Qwen&sort=createdAt&direction=-1&limit=30",
+        "titlePaths": [
+          "id"
+        ],
+        "summaryPaths": [
+          "pipeline_tag"
+        ],
+        "publishedAtPath": "createdAt",
+        "urlTemplate": "https://huggingface.co/{raw:id}",
+        "externalIdPath": "id",
+        "allowUrlPrefixes": [
+          "https://huggingface.co/Qwen/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 4,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "qwen",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "rss-arxiv-ai-papers",
+      "name": "arXiv · AI 前沿论文",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://rss.arxiv.org/rss/cs.AI+cs.CL+cs.LG",
+        "summaryIsBody": true,
+        "sortByPublishedAt": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "large language",
+            "language model",
+            "multimodal",
+            "multi-modal",
+            "reasoning",
+            "agentic",
+            "tool use",
+            "tool-use",
+            "inference",
+            "quantization",
+            "foundation model",
+            "generative",
+            "alignment",
+            "reinforcement learning",
+            "diffusion",
+            "vision-language"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 5,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "arxiv",
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "论文"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-cn-nbs-data",
+      "name": "国家统计局 · 数据发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.stats.gov.cn/sj/zxfb/",
+        "itemSelector": "li:has(a[href*=\"/t20\"])",
+        "linkSelector": "a",
+        "publishedAtSelector": "span",
+        "allowUrlPrefixes": [
+          "https://www.stats.gov.cn/sj/zxfb/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-cn-mof-policy",
+      "name": "财政部 · 政策发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.mof.gov.cn/zhengwuxinxi/zhengcefabu/",
+        "itemSelector": ".xwfb_listbox li",
+        "linkSelector": "a",
+        "publishedAtSelector": "span",
+        "allowUrlPrefixes": [
+          "https://gks.mof.gov.cn/",
+          "https://gss.mof.gov.cn/",
+          "https://jjs.mof.gov.cn/",
+          "https://jkw.mof.gov.cn/",
+          "https://jrs.mof.gov.cn/",
+          "https://kjs.mof.gov.cn/",
+          "https://nys.mof.gov.cn/",
+          "https://sbs.mof.gov.cn/",
+          "https://szs.mof.gov.cn/",
+          "https://www.mof.gov.cn/",
+          "https://yss.mof.gov.cn/",
+          "https://zwgls.mof.gov.cn/"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-bls-cpi",
+      "name": "美国劳工统计局 · CPI",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.bls.gov/feed/cpi.rss",
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-bls-employment",
+      "name": "美国劳工统计局 · 就业报告",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.bls.gov/feed/empsit.rss",
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-bls-ppi",
+      "name": "美国劳工统计局 · PPI",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.bls.gov/feed/ppi.rss",
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-bea-releases",
+      "name": "美国 BEA · GDP / PCE 等经济数据",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.bea.gov/rss/rss.xml",
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-nvda",
+      "name": "英伟达（NVDA）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001045810.json",
+        "adapter": "sec_submissions",
+        "cik": "0001045810",
+        "ticker": "NVDA",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1045810/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "nvda",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-msft",
+      "name": "微软（MSFT）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0000789019.json",
+        "adapter": "sec_submissions",
+        "cik": "0000789019",
+        "ticker": "MSFT",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/789019/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "msft",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-aapl",
+      "name": "苹果（AAPL）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0000320193.json",
+        "adapter": "sec_submissions",
+        "cik": "0000320193",
+        "ticker": "AAPL",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/320193/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "aapl",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-googl",
+      "name": "Alphabet（GOOGL）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001652044.json",
+        "adapter": "sec_submissions",
+        "cik": "0001652044",
+        "ticker": "GOOGL",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1652044/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "googl",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-amzn",
+      "name": "亚马逊（AMZN）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001018724.json",
+        "adapter": "sec_submissions",
+        "cik": "0001018724",
+        "ticker": "AMZN",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1018724/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "amzn",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-meta",
+      "name": "Meta（META）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001326801.json",
+        "adapter": "sec_submissions",
+        "cik": "0001326801",
+        "ticker": "META",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1326801/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "meta",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-tsla",
+      "name": "特斯拉（TSLA）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001318605.json",
+        "adapter": "sec_submissions",
+        "cik": "0001318605",
+        "ticker": "TSLA",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1318605/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "tsla",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-avgo",
+      "name": "博通（AVGO）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001730168.json",
+        "adapter": "sec_submissions",
+        "cik": "0001730168",
+        "ticker": "AVGO",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1730168/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "avgo",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-amd",
+      "name": "AMD（AMD）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0000002488.json",
+        "adapter": "sec_submissions",
+        "cik": "0000002488",
+        "ticker": "AMD",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/2488/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "amd",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false
+    },
+    {
+      "id": "stock-us-sec-tsm",
+      "name": "台积电美股（TSM）· SEC 公司申报",
+      "kind": "json_list",
+      "config": {
+        "url": "https://data.sec.gov/submissions/CIK0001046179.json",
+        "adapter": "sec_submissions",
+        "cik": "0001046179",
+        "ticker": "TSM",
+        "allowUrlPrefixes": [
+          "https://www.sec.gov/Archives/edgar/data/1046179/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 2,
+          "initialBackfillLimit": 2
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "tsm",
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "tags": [
+        "美股",
+        "公司公告"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false

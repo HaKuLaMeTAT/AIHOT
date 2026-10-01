@@ -1,0 +1,13 @@
+[Unit]
+Description=Rotate personal news logs on D drive
+PartOf=news-runtime.target
+[Service]
+Type=oneshot
+Slice=news-runtime.slice
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+@STORAGE_GUARD@
+ExecCondition=/usr/bin/test -f @CONFIG@/logrotate.conf
+ExecStart=/usr/sbin/logrotate --state @RUNTIME@/logs/.rotation-state @CONFIG@/logrotate.conf
+UMask=0077

@@ -1,0 +1,22 @@
+[Unit]
+Description=Personal news collector and analyzer
+Requires=news-db.service
+After=news-db.service
+PartOf=news-runtime.target
+[Service]
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+Type=simple
+Slice=news-runtime.slice
+@STORAGE_GUARD@
+ExecCondition=/usr/bin/test ! -e @RUNTIME@/data/operations/capacity-paused.json
+@STORAGE_LOG@
+WorkingDirectory=@RUNTIME@/app
+Environment=PATH=@NODEDIR@:@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@NODEDIR@/node --env-file=@CONFIG@/env apps/worker/src/main.ts
+Restart=on-failure
+RestartSec=15
+KillMode=mixed
+TimeoutStopSec=210
+UMask=0077

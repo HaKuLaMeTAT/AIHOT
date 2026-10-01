@@ -1,0 +1,9 @@
+[Unit]
+Description=Personal news resource limits
+[Slice]
+MemoryHigh=768M
+MemoryMax=1280M
+CPUQuota=75%
+CPUWeight=20
+IOWeight=20
+TasksMax=128

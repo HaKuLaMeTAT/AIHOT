@@ -1,3 +1,13 @@
+# 个人热点：AI 与股市资讯
+
+基于 [KKKKhazix/AIHOT](https://github.com/KKKKhazix/AIHOT) 的个人使用 fork，保留上游 MIT 许可。增加 AI 与股市双通道低并发分析、Codex CLI / DeepSeek 手动切换、微信测试号早晚报及重大事件通知、手机阅读与事件归并、D 盘数据保留和运行监控。
+
+此仓库是脱敏的源码版本，不包含真实密钥、接收者标识、运行数据或个人部署记录。开始运行请从 [.env.example](.env.example) 建立自己的本地配置；个人后台说明见 [部署文档](docs/deploy.md#个人热点ai股市与微信)。本地服务无需网页即可采集和分析，日报阅读页复用 API 进程。
+
+下文保留原项目介绍与框架使用说明。
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">

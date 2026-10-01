@@ -1,0 +1,20 @@
+[Unit]
+Description=Personal news local API
+Requires=news-db.service
+After=news-db.service
+PartOf=news-runtime.target
+[Service]
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+Type=simple
+Slice=news-runtime.slice
+@STORAGE_GUARD@
+@STORAGE_LOG@
+WorkingDirectory=@RUNTIME@/app
+Environment=PATH=@NODEDIR@:@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@NODEDIR@/node --env-file=@CONFIG@/env apps/api/src/main.ts
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=210
+UMask=0077

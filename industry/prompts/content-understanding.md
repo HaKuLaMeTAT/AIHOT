@@ -14,13 +14,13 @@
 - `product_launch`：新产品、工具或重大功能更新
 - `tool_or_prompt`：可直接复用的方法、Prompt、Skill 或技巧
 - `research_paper`：论文、研究或技术报告
-- `industry_event`：融资、收购、监管、诉讼、商业动作或人事
+- `industry_event`：融资、收购、监管、诉讼、商业动作、人事、公司公告、财报或宏观政策事件
 - `opinion_analysis`：观点、行业判断、复盘或长访谈
 - `tutorial_explainer`：教程、科普、解读或评测
 
 优先级：发了模型选 model_release；发了工具选 product_launch；发了 Prompt 或方法选 tool_or_prompt；论文优先 research_paper；评测选 tutorial_explainer。
 
-输出前检查 `itemType` 与第一个分类标签是否自洽：`model_release` 对应“模型发布”，`product_launch` 对应“产品更新”，`research_paper` 对应“论文/研究”，`industry_event` 对应“行业动态”或“政策/监管”，`opinion_analysis` 对应“大佬观点”或“现象/趋势”，`tutorial_explainer` 对应“教程/实践”或“评测/基准”。如果二者冲突，按当前材料的核心事件修正后再输出。
+输出前检查 `itemType` 与第一个分类标签是否自洽：`model_release` 对应“模型发布”，`product_launch` 对应“产品更新”，`research_paper` 对应“论文/研究”，`industry_event` 对应“行业动态”、“政策/监管”或股市分类标签，`opinion_analysis` 对应“大佬观点”或“现象/趋势”，`tutorial_explainer` 对应“教程/实践”或“评测/基准”。如果二者冲突，按当前材料的核心事件修正后再输出。
 
 ## 作者角色
 
@@ -32,11 +32,11 @@
 
 ## 标签
 
-`tags` 输出 1–6 个字符串。第一个必须从以下分类标签中选一个：模型发布、产品更新、开源/仓库、论文/研究、教程/实践、大佬观点、评测/基准、安全/对齐、现象/趋势、行业动态、政策/监管、非AI/通用工具、其他。
+`tags` 输出 1–6 个字符串。第一个必须从以下分类标签中选一个：模型发布、产品更新、开源/仓库、论文/研究、教程/实践、大佬观点、评测/基准、安全/对齐、现象/趋势、行业动态、政策/监管、非AI/通用工具、其他、证券政策/监管、公司公告、行业产业、市场异动、宏观事件。
 
 其后可选 0–5 个适用标签，并且只能来自以下两个白名单：
 
-- 主题：Agent、编码、推理、多模态、语音、视频、图像生成、RAG、端侧、数据/训练、搜索、部署/工程、开源生态、具身智能、MCP/工具调用
+- 主题：Agent、编码、推理、多模态、语音、视频、图像生成、RAG、端侧、数据/训练、搜索、部署/工程、开源生态、具身智能、MCP/工具调用、A股、港股、美股、财报、重组并购、货币政策、产业链
 - 实体：OpenAI、Anthropic、DeepSeek、DeepMind、Google、Meta、Microsoft、xAI、Hugging Face、GitHub、arXiv
 
 正文中即使明确出现了 NVIDIA、Apple、阿里等其他实体，也不要把它们放进 `tags`。不要创造白名单之外的标签。没有适用的主题或实体时，只返回第一个分类标签；例如学校限制 AI 使用的监管新闻，不需要强行归到“编码”或“推理”。
@@ -60,3 +60,5 @@
 只返回合法 JSON，不要 Markdown，不要解释。顶层必须且只能包含以下六个字段：
 
 {"itemType":"product_launch","authorRole":"principal","tags":["产品更新","Agent"],"editorialJudgment":"原文给出了能力变化和开放入口，读者可以据此判断它会怎样改变现有工作流。","titleZh":"某产品发布智能体功能","summaryZh":"某产品发布新的智能体功能，给出了开放入口和主要能力变化。"}
+
+股市材料按实际市场添加 A股、港股或美股标签，未知不猜。标题、摘要与阅读价值只描述有来源的事实；保留报告期、货币、单位、同比/环比、拟议/批准/实施等阶段差异。不推测证券代码，不提供买卖或涨跌建议。

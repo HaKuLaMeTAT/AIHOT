@@ -2,7 +2,7 @@
 // skips the analysis queue; history (a backfill that was already old when found) waits behind live
 // work and founds no event; a post that found no story is grouped again when a report founds a fact
 // close to it, or when the post it quotes arrives and joins a fact.
-import { stub, tag } from "./setup.ts";
+import { enableLocalModelStub, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
@@ -52,6 +52,7 @@ async function report(suffix: string, opts: { title: string; backfill?: string; 
 }
 
 before(async () => {
+  await enableLocalModelStub(provider.url);
   await sql`UPDATE budgets SET per_minute = 1000, per_hour = 10000, per_day = 100000 WHERE service IN ('dashscope', 'deepseek')`;
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at) VALUES
             (${EDITORIAL}, 'Test editorial', 'rss', 'T1', 'editorial', '2100-01-01'),

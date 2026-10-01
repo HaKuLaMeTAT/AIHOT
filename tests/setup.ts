@@ -66,3 +66,11 @@ export function gate<T = void>() {
 
 /** A short unique tag for the rows a test creates. */
 export const tag = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
+/** Open the model valve only for a test which has installed a loopback provider stub. */
+export async function enableLocalModelStub(url: string) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http:" || parsed.hostname !== "127.0.0.1") throw new Error("Model tests require a local stub");
+  const { config } = await import("@aihot/backend/config");
+  config.modelCallsEnabled = true;
+}

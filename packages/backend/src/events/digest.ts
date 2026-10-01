@@ -29,6 +29,8 @@ export function storyStatusFor(latestAt: Date | null, now = Date.now()): "active
 
 /** `afterCorrection`: an editor changed a report of this story; rewrite even when older versions lack inputs. */
 export async function composeStoryDigest(storyId: number, opts: { afterCorrection?: boolean } = {}): Promise<{ updated: boolean; version?: number }> {
+  // Personal daily pages use article summaries; event grouping itself remains enabled.
+  if (process.env.STORY_DIGEST_ENABLED === "false") return { updated: false };
   const [story] = await sql<{ id: number; title: string; digest: string | null; version: number; origin: string }[]>`
     SELECT id, title, digest, version, origin FROM stories WHERE id = ${storyId} AND merged_into IS NULL`;
   if (!story) return { updated: false };

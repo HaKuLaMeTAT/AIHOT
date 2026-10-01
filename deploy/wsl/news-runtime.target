@@ -1,0 +1,7 @@
+[Unit]
+Description=Personal news headless backend
+Requires=news-db.service news-api.service news-worker.service
+@STORAGE_TIMER@
+After=news-db.service
+[Install]
+WantedBy=default.target

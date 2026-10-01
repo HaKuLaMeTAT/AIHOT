@@ -1,3 +1,4 @@
+import { PRIORITY_SOURCES } from "@aihot/industry/processing";
 // Collection run for one source: fetch listing → filter → store material → enqueue processing.
 // A failed fetch never advances the success cursor; the source's health reflects consecutive failures.
 import { sql } from "../db.ts";
@@ -11,6 +12,7 @@ import { unsupportedConfig } from "./config-keys.ts";
 import { fetchJsonList } from "./json-list.ts";
 import { fetchXSearch, planXShards, readXSearch, shardHandle, shardQuery, SHARDABLE_SQL, tweetToCandidate, type XBacklog, type XRead } from "./x.ts";
 import { FetchError, type Candidate, type SourceRow } from "./types.ts";
+import { candidateIdentity, limitNewCandidates } from "./limits.ts";
 
 export interface CollectResult {
   sourceId: string;
@@ -33,6 +35,7 @@ export function noiseFiltered(c: Candidate, source: SourceRow): boolean {
   const has = (text: string, words: string[] | undefined) => (words ?? []).some((k) => text.includes(k.toLowerCase()));
   const title = c.title.toLowerCase();
   const hay = `${title}\n${(c.excerpt ?? "").toLowerCase()}`;
+  if (f.requireAnyMarkers?.length && !has(hay, f.requireAnyMarkers)) return true;
   if (has(hay, f.keepIfMatches)) return false;
   return has(title, f.dropMarkersTitleOnly) || has(hay, f.dropMarkers);
 }
@@ -124,7 +127,25 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     }
     found = candidates.length;
     candidates = candidates.filter((c) => allowed(c.url, source)).map((c) => rewriteUrl(c, source)).filter((c) => !noiseFiltered(c, source));
+    // Optional rolling collection window: a large RSS archive must not turn a small personal
+    // deployment into months of historical analysis. Unknown dates remain eligible for details.
+    const ageHours = Number(process.env.COLLECT_MAX_AGE_HOURS || 0);
+    const recent = (c: Candidate) => !(ageHours > 0) || !c.publishedAt || c.publishedAt.getTime() >= Date.now() - ageHours * 3_600_000;
+    candidates = candidates.filter(recent);
     if (source.config.sortByPublishedAt) candidates.sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
+
+    const dailyCap = Number(source.config._aihot?.maxNewItemsPerDay || 0);
+    if (dailyCap > 0) {
+      const keys = candidates.map(c => candidateIdentity(c, sourceId));
+      const known = keys.length ? await sql<{ identity_key: string }[]>`SELECT identity_key FROM articles WHERE identity_key IN ${sql(keys)}` : [];
+      const [usage] = await sql<{ used: number }[]>`SELECT count(*)::int AS used FROM articles WHERE source_id = ${sourceId}
+        AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')`;
+      const bounded = limitNewCandidates(candidates, sourceId, new Set(known.map(r => r.identity_key)), Math.max(0, dailyCap - Number(usage?.used ?? 0)));
+      candidates = bounded.candidates;
+      detail = { ...detail, dailyNewCap: dailyCap, newItemsToday: Number(usage?.used ?? 0), deferredByCap: bounded.deferred };
+      // A deferred item must remain readable after midnight even if the RSS feed returns 304.
+      if (bounded.deferred > 0 && source.kind === "rss") delete nextCursor.rss;
+    }
 
     // First import of a new source: bounded, and archived by source time (never "today", never pushed).
     const backfillLimit = Number(source.config._aihot?.initialBackfillLimit ?? 30);
@@ -179,7 +200,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       }
     }
 
-    ({ created, revised } = await store(sourceId, candidates, firstImport ? "first-import" : null));
+    ({ created, revised } = await store(sourceId, candidates.filter(recent), firstImport ? "first-import" : null));
 
     if (firstImport) nextCursor.initializedAt = new Date().toISOString();
     nextCursor.lastOkAt = new Date().toISOString();
@@ -355,7 +376,8 @@ export async function adaptIntervals(): Promise<{ updated: number }> {
     // Listings read through Jina are not looked at more than hourly: busy ones would outrun its daily budget.
     const min = r.paid_listing ? 60 : 15;
     // X accounts read by shard follow the shard's pace, whatever their own volume.
-    const target = shardHandle(r) ? shardMinutes(r.participation_mode) : perDay <= 0.15 ? max : Math.round(Math.min(max, Math.max(min, (24 * 60) / (perDay * 3))));
+    const fixed = Number(process.env.PRIORITY_SOURCE_INTERVAL_MINUTES || 0);
+    const target = fixed > 0 && PRIORITY_SOURCES.includes(r.id) ? fixed : shardHandle(r) ? shardMinutes(r.participation_mode) : perDay <= 0.15 ? max : Math.round(Math.min(max, Math.max(min, (24 * 60) / (perDay * 3))));
     const res = await sql`UPDATE sources SET interval_minutes = ${target} WHERE id = ${r.id} AND interval_minutes <> ${target}`;
     updated += res.count;
   }

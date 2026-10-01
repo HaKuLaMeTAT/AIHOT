@@ -13,7 +13,7 @@ import { CATEGORY_KEYS } from "@aihot/contracts/taxonomy";
 import { CATEGORIES } from "@aihot/industry/taxonomy";
 import { SELECTION } from "@aihot/industry/selection";
 import { sql } from "../db.ts";
-import { chatJson, MODELS, type ContentPart } from "../providers/llm.ts";
+import { chatJson, extractJson, MODELS, type ContentPart } from "../providers/llm.ts";
 import { completeReceipt, ProviderRejectedError } from "../providers/receipts.ts";
 import { collapseWhitespace } from "../lib/text.ts";
 import { modelFor } from "./models.ts";
@@ -69,6 +69,16 @@ const scoreCall = (model: string) => SCORE_CALL[model] ?? { temperature: 0.2, ma
 export const SCORE_SYSTEM = promptText("selection-score");
 
 export const ScoreSchema = z.object({ attentionScore: z.coerce.number().int().min(0).max(100) });
+const ScoreOutputSchema = { type: "object", properties: { attentionScore: { type: "integer", minimum: 0, maximum: 100 } },
+  required: ["attentionScore"], additionalProperties: false };
+
+/** Accept a complete integer score, never extract a number from prose or repair incomplete JSON. */
+export function parseScoreOutput(content: string): unknown {
+  const text = content.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, "$1").trim();
+  if (/^(?:0|[1-9]\d?|100)$/.test(text)) return { attentionScore: Number(text) };
+  return extractJson(content);
+}
+
 
 const SCORE_TIME = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
@@ -135,6 +145,13 @@ const UnderstandSchema = z.object({
   titleZh: z.string().trim().min(1).max(200),
   summaryZh: z.string().trim().min(1).max(4000),
 });
+
+const UnderstandOutputSchema = { type: "object", properties: {
+  itemType: { type: "string", enum: ITEM_TYPES },
+  authorRole: { type: "string", enum: ["principal", "observer", "relayer"] },
+  tags: { type: "array", items: { type: "string" } }, editorialJudgment: { type: "string" },
+  titleZh: { type: "string" }, summaryZh: { type: "string" },
+}, required: ["itemType", "authorRole", "tags", "editorialJudgment", "titleZh", "summaryZh"], additionalProperties: false };
 
 const SummarizeSchema = z.object({ titleZh: z.string(), summaryZh: z.string(), bodyZh: z.string() });
 
@@ -224,7 +241,7 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
     try {
       const res = await chatJson({
         model, purpose: "score_article", subject: subjectOf(a), promptVersion: PROMPT_VERSIONS.score, system: SCORE_SYSTEM, user: input,
-        schema: ScoreSchema, temperature: call.temperature, maxTokens: call.maxTokens, timeoutMs: call.timeoutMs,
+        schema: ScoreSchema, parse: parseScoreOutput, codexOutputSchema: ScoreOutputSchema, temperature: call.temperature, maxTokens: call.maxTokens, timeoutMs: call.timeoutMs,
         // Each call is its own paid request; an explicit re-evaluation gets new ones.
         attemptTag: tagged(opts.attemptTag, `score-${i + 1}`),
       });
@@ -267,7 +284,7 @@ async function runUnderstand(a: AnalyzeInputArticle, opts: StepOpts): Promise<An
     checkAnalysisRunning();
     return chatJson({
       model, purpose: "understand_article", subject: subjectOf(a), promptVersion: PROMPT_VERSIONS.understand, system: UNDERSTAND_SYSTEM,
-      user: image ? [{ type: "text", text }, image] : text, schema: UnderstandSchema, temperature: 0.2, maxTokens: 16_384,
+      user: image ? [{ type: "text", text }, image] : text, schema: UnderstandSchema, codexOutputSchema: UnderstandOutputSchema, temperature: 0.2, maxTokens: 16_384,
       timeoutMs: 180_000, attemptTag: tagged(opts.attemptTag, "understand"),
     });
   };
@@ -346,14 +363,15 @@ export async function runAnalysis(a: AnalyzeInputArticle, opts: StepOpts & { sta
     const scores = threshold === null ? null : await runScores(a, threshold, opts);
     return { prefilter, scores, writing: null, structure: null };
   }
-  // The structure step needs nothing from the scores: it runs beside them.
-  const structure = runStructure(a, opts).then((value) => ({ value }), (error: unknown) => ({ error }));
+  // Personal deployments defer structure until scoring/writing succeeds, avoiding work on retries.
+  const structure = process.env.EDITORIAL_SERIAL_STEPS === "true" ? null
+    : runStructure(a, opts).then((value) => ({ value }), (error: unknown) => ({ error }));
   try {
     const scores = threshold === null ? null : await runScores(a, threshold, opts);
     const sum = scores && !scores.refused && scores.values.length === SCORE_CALLS ? scores.values.reduce((total, v) => total + v, 0) : null;
     const near = sum !== null && (sum >= scores!.threshold * SCORE_CALLS || sum > UNDERSTAND_FLOOR * SCORE_CALLS);
     const writing = (near ? await runUnderstand(a, opts) : null) ?? (await runSummarize(a, opts));
-    const s = await structure;
+    const s = structure ? await structure : { value: await runStructure(a, opts) };
     if ("error" in s) throw s.error;
     return { prefilter, scores, writing, structure: s.value };
   } finally {

@@ -1,7 +1,7 @@
 // Paid requests: an answer already received is reused, every request actually sent counts against the
 // budget (retries of one logical request included), a lost answer is bought again at most once, and the
 // valve stops calls before they are sent.
-import { stub, tag } from "./setup.ts";
+import { enableLocalModelStub, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { z } from "zod";
@@ -23,6 +23,7 @@ const ask = (subject: string) =>
 
 let savedBudget: { per_minute: number; per_hour: number; per_day: number } | undefined;
 before(async () => {
+  await enableLocalModelStub(provider.url);
   [savedBudget] = await sql<{ per_minute: number; per_hour: number; per_day: number }[]>`SELECT per_minute, per_hour, per_day FROM budgets WHERE service = 'deepseek'`;
 });
 after(async () => {

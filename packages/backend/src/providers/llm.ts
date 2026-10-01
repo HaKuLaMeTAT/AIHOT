@@ -6,6 +6,9 @@ import { config, credential } from "../config.ts";
 import { sha256 } from "../lib/ids.ts";
 import { completeReceipt, paidRequest, ProviderRejectedError, rejectReceivedResponse } from "./receipts.ts";
 import { sql } from "../db.ts";
+import { acquireModelSlot } from "./model-slots.ts";
+import { codexCompletion } from "./codex.ts";
+import { modelChannelFor, splitModelBudget } from "./model-channels.ts";
 
 export interface ModelSpec {
   key: string;
@@ -31,9 +34,10 @@ function extraFromEnv(value: string | undefined): Record<string, unknown> | unde
 export const MODELS: Record<string, ModelSpec> = {
   // Read from the environment at call time.
   default: {
-    key: "default", service: "llm", baseUrlEnv: "LLM_BASE_URL", apiKeyEnv: "LLM_API_KEY",
-    get model() { return process.env.LLM_MODEL ?? ""; },
-    get extra() { return extraFromEnv(process.env.LLM_EXTRA_JSON); },
+    key: "default", get service() { return process.env.LLM_PROVIDER === "codex" ? "codex" : "llm"; }, baseUrlEnv: "LLM_BASE_URL", apiKeyEnv: "LLM_API_KEY",
+    get model() { return process.env.LLM_PROVIDER === "codex" ? (process.env.CODEX_MODEL || "") : (process.env.LLM_MODEL ?? ""); },
+    // HTTP-only fallback parameters must not change the identity of a local CLI request.
+    get extra() { return process.env.LLM_PROVIDER === "codex" ? undefined : extraFromEnv(process.env.LLM_EXTRA_JSON); },
     get jsonMode() { return process.env.LLM_JSON_MODE !== "false"; },
     get vision() { return process.env.LLM_VISION === "true"; },
   },
@@ -99,6 +103,8 @@ export interface ChatJsonOptions<S extends z.ZodType> {
   /** false: the model answers in its own text format (no JSON mode); `parse` turns it into the schema's input. */
   json?: boolean;
   parse?: (content: string) => unknown;
+  /** Native CLI JSON constraint; the task schema remains authoritative on cached and fresh output. */
+  codexOutputSchema?: Record<string, unknown>;
 }
 
 export interface ChatJsonResult<T> {
@@ -117,7 +123,7 @@ export class ModelOutputError extends Error {
   }
 }
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   let t = text.trim();
   const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(t);
   if (fence) t = fence[1]!;
@@ -163,7 +169,11 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
   if (!config.modelCallsEnabled) throw new Error("Model calls are disabled (MODEL_CALLS_ENABLED=false)");
   const baseUrl = credential("models", spec.baseUrlEnv);
   const apiKey = credential("models", spec.apiKeyEnv);
-  if (!baseUrl || !apiKey || !spec.model) throw new Error(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
+  const localCodex = spec.service === "codex";
+  if (!spec.model || (!localCodex && (!baseUrl || !apiKey))) throw new Error(`Model ${opts.model} is not configured (${localCodex ? "CODEX_MODEL" : `${spec.baseUrlEnv}, ${spec.apiKeyEnv}, LLM_MODEL`})`);
+  if (localCodex && Array.isArray(opts.user) && opts.user.some((part) => part.type === "image_url")) {
+    throw new Error("Codex text transport does not support image input; keep LLM_VISION disabled");
+  }
 
   const temperature = opts.temperature ?? 0.2;
   const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + (spec.key.endsWith("-think") ? 4000 : 0);
@@ -182,48 +192,55 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
     ...(spec.extra ?? {}),
   };
 
+  const channel = splitModelBudget(spec.service) ? await modelChannelFor(opts.subject) : undefined;
   const receipt = await paidRequest(
     {
       service: spec.service,
       model: spec.model,
       purpose: opts.purpose,
       subject: opts.subject,
-      identity: { model: spec.model, promptVersion: opts.promptVersion, system: sha256(opts.system), user: sha256(userText), temperature, maxTokens, extra: spec.extra ?? null },
+      identity: { model: spec.model, promptVersion: opts.promptVersion, system: sha256(opts.system), user: sha256(userText), temperature, maxTokens, extra: spec.extra ?? null,
+        ...(localCodex ? { transport: "codex-cli-v1", reasoning: process.env.CODEX_REASONING_EFFORT || "low" } : {}) },
       requestSummary: { promptVersion: opts.promptVersion, systemHash: sha256(opts.system), userHash: sha256(userText), userChars: userText.length, temperature, maxTokens },
       attemptTag: opts.attemptTag,
+      budgetChannel: channel,
     },
     async () => {
+      if (localCodex) return codexCompletion({ model: spec.model, system: opts.system, user: userText, timeoutMs: opts.timeoutMs ?? 120_000, channel, outputSchema: opts.codexOutputSchema });
       const started = Date.now();
-      let res: Response;
+      const unlock = channel ? await acquireModelSlot(channel, opts.timeoutMs ?? 120_000) : undefined;
       try {
-        res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
-        });
-      } catch (error) {
-        if (isConnectFailure(error)) throw new ProviderRejectedError(`connect failed: ${String(error)}`, null, true);
-        throw error;
-      }
-      const text = await res.text();
-      if (!res.ok) {
-        const retryable = res.status === 429 || res.status >= 500;
-        throw new ProviderRejectedError(`HTTP ${res.status}: ${text.slice(0, 500)}`, res.status, retryable);
-      }
-      let json: Record<string, unknown>;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        json = { unparsable: text.slice(0, 20000) };
-      }
-      const usage = (json.usage as Record<string, unknown> | undefined) ?? null;
-      return {
-        response: { ...json, _latencyMs: Date.now() - started },
-        requestId: (json.id as string | undefined) ?? res.headers.get("x-request-id"),
-        usage,
-        cost: null,
-      };
+        let res: Response;
+        try {
+          res = await fetch(`${baseUrl!.replace(/\/$/, "")}/chat/completions`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(Math.max(1, (opts.timeoutMs ?? 120_000) - (Date.now() - started))),
+          });
+        } catch (error) {
+          if (isConnectFailure(error)) throw new ProviderRejectedError(`connect failed: ${String(error)}`, null, true);
+          throw error;
+        }
+        const text = await res.text();
+        if (!res.ok) {
+          const retryable = res.status === 429 || res.status >= 500;
+          throw new ProviderRejectedError(`HTTP ${res.status}: ${text.slice(0, 500)}`, res.status, retryable);
+        }
+        let json: Record<string, unknown>;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          json = { unparsable: text.slice(0, 20000) };
+        }
+        const usage = (json.usage as Record<string, unknown> | undefined) ?? null;
+        return {
+          response: { ...json, _latencyMs: Date.now() - started },
+          requestId: (json.id as string | undefined) ?? res.headers.get("x-request-id"),
+          usage,
+          cost: null,
+        };
+      } finally { unlock?.(); }
     },
   );
 

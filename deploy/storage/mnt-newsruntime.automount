@@ -1,0 +1,11 @@
+[Unit]
+# Example UID: use the same local UID as mnt-newsruntime.mount.
+Description=Automount personal news D-drive data
+Before=user@1000.service
+
+[Automount]
+Where=/mnt/newsruntime
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target

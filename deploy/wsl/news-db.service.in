@@ -1,0 +1,21 @@
+[Unit]
+Description=Personal news PostgreSQL 16
+PartOf=news-runtime.target
+[Service]
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+Type=simple
+Slice=news-runtime.slice
+RuntimeDirectory=news-pg
+RuntimeDirectoryMode=0700
+@STORAGE_GUARD@
+@STORAGE_LOG@
+Environment=LD_LIBRARY_PATH=@RUNTIME@/pgsql/usr/lib/x86_64-linux-gnu
+ExecStart=@RUNTIME@/pgsql/usr/lib/postgresql/16/bin/postgres -D @RUNTIME@/pgdata -k %t/news-pg
+ExecStartPost=/bin/bash -c 'for attempt in {1..30}; do @RUNTIME@/pgsql/usr/lib/postgresql/16/bin/pg_isready -h %t/news-pg -p 55432 -q && exit 0; sleep 1; done; exit 1'
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=120
+UMask=0077

@@ -4,6 +4,7 @@ import { sql } from "../db.ts";
 import { audit } from "./auth.ts";
 import { Conflict } from "./sources.ts";
 import { failureGroupSql, queueProcessing, requeueFailed } from "../jobs/content.ts";
+import { enqueue, QUEUES } from "../jobs/queue.ts";
 
 const STALE_HEARTBEAT_MS = 3 * 60_000;
 
@@ -88,12 +89,17 @@ async function release(id: number, error: string, actor: string, note: string, b
     UPDATE receipts SET status = 'failed', error = ${error}, updated_at = now() WHERE id = ${id} AND status = 'unknown' RETURNING subject, purpose`;
   if (!before) return null;
   await sql`UPDATE receipt_attempts SET status = 'failed', error = ${error} WHERE receipt_id = ${id} AND status = 'unknown'`;
-  const article = before.purpose === "analyze_article" ? /^article:([^@]+)@/.exec(before.subject ?? "")?.[1] : undefined;
+  const article = ["analyze_article", "prefilter_article", "score_article", "understand_article", "summarize_article", "structure_article"].includes(before.purpose)
+    ? /^article:([^@]+)@/.exec(before.subject ?? "")?.[1] : undefined;
   let requeued = false;
   if (article) {
     const [a] = await sql`UPDATE articles SET processing_state = 'new', processing_attempts = 0, processing_retry_at = NULL, processing_error = NULL
                           WHERE id = ${article} AND processing_state = 'failed' RETURNING id`;
     if (a) requeued = !!(await queueProcessing(article, { step: "analyze" }));
+  }
+  if (before.purpose === "notification_urgent") {
+    const articleId = /^urgent:([^:]+):/.exec(before.subject ?? "")?.[1];
+    if (articleId) requeued = !!(await enqueue(QUEUES.notifySelected, { articleId }, { singletonKey: `receipt:${id}` }));
   }
   await audit(actor, "receipt.release", `receipt:${id}`, note, { status: "unknown" }, { status: "failed", billed, requeued });
   return { id, status: "failed", subject: before.subject, purpose: before.purpose, requeued };

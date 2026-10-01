@@ -1,0 +1,11 @@
+[Unit]
+Description=Check personal news log sizes hourly
+PartOf=news-runtime.target
+After=news-db.service
+[Timer]
+OnCalendar=hourly
+AccuracySec=1min
+Persistent=false
+Unit=news-logrotate.service
+[Install]
+WantedBy=news-runtime.target

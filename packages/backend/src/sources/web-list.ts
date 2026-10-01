@@ -167,7 +167,9 @@ export function fromHtml(html: string, base: string, source: SourceRow): Candida
     if (!url || seen.has(url) || !allowed(url, source)) continue;
     if (!sectionsArePosts && listingItself(url, listing)) continue;
     const titleEl = c.titleSelector ? (el.is(c.titleSelector) ? el : el.find(c.titleSelector).first()) : linkEl;
-    const title = collapseWhitespace(titleEl.text() || linkEl.attr("title") || "");
+    const label = collapseWhitespace(titleEl.text());
+    const full = collapseWhitespace(linkEl.attr("title") || "");
+    const title = /(?:\.\.\.|…)$/.test(label) && full.startsWith(label.replace(/(?:\.\.\.|…)$/, "")) ? full : label || full;
     if (!title) continue;
     let publishedAt: Date | null = null;
     if (c.publishedAtSelector) {
@@ -302,9 +304,28 @@ async function fromMimoHome(html: string, base: string, source: SourceRow): Prom
   throw new FetchError("mimo_home: no Blog list in the homepage's chunks");
 }
 
+/** SZSE publishes list rows as string literals inside scripts; read values without executing JS. */
+export function fromSzseNews(html: string, base: string, source: SourceRow): Candidate[] {
+  const $ = cheerio.load(html);
+  const out: Candidate[] = [];
+  $(".newslist li").each((_i, node) => {
+    const row = $(node);
+    const script = row.find("script").text().replace(/^[ \t]*\/\/.*$/gm, "");
+    const field = (name: string) => new RegExp(`\\bvar\\s+${name}\\s*=\\s*'([^'\\r\\n]*)'`).exec(script)?.[1];
+    const url = absolute(field("curHref"), base);
+    const title = field("curTitle");
+    if (url && title && allowed(url, source) && !out.some((c) => c.url === url)) {
+      out.push({ url, title: collapseWhitespace(stripTags(title)), publishedAt: parseLooseDate(row.find(".time").text(), source.config.publishedAtUtcOffset) });
+    }
+  });
+  if (!out.length) throw new FetchError("szse_news: no news rows found; listing format may have changed");
+  return out;
+}
+
 export async function fetchWebList(source: SourceRow): Promise<Candidate[]> {
   const { text, viaJina, base } = await fetchListingText(source);
-  const mode = source.config.adapter === "mimo_home" ? "mimo_home" : source.config.parseMode ?? (viaJina ? "markdown" : "html");
+  const mode = source.config.adapter ?? source.config.parseMode ?? (viaJina ? "markdown" : "html");
+  if (mode === "szse_news") return fromSzseNews(text, base, source);
   let out: Candidate[];
   if (mode === "mimo_home") out = await fromMimoHome(text, base, source);
   else if (mode === "markdown") out = fromMarkdown(text, base, source);

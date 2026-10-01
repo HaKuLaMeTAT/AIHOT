@@ -1,7 +1,7 @@
 // Full-text translations follow the text: an article corrected while the model was translating the old
 // wording is translated again, and a translation of an older revision is never shown as the current one.
 // Links and images inside a paragraph survive the model, and the post an X item quotes is translated.
-import { gate, stub, tag } from "./setup.ts";
+import { enableLocalModelStub, gate, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
@@ -57,6 +57,7 @@ async function detail(id: string) {
 }
 
 before(async () => {
+  await enableLocalModelStub(provider.url);
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, site_fulltext, syndicate_fulltext, next_fetch_at)
             VALUES (${SOURCE}, 'Test translate', 'rss', 'T1', 'editorial', true, false, '2100-01-01')`;
 });

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily personal news backup at 03:00 Beijing time
+PartOf=news-runtime.target
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Shanghai
+Persistent=true
+AccuracySec=1min
+Unit=news-backup.service
+[Install]
+WantedBy=news-runtime.target

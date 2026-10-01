@@ -1,0 +1,37 @@
+import { tag } from "./setup.ts";
+import assert from "node:assert/strict";
+import { after, test } from "node:test";
+import { closeDb, sql } from "@aihot/backend/db";
+import { upsertMaterial } from "@aihot/backend/content/materials";
+import { releaseReceipt } from "@aihot/backend/admin/runs";
+import { paidRequest } from "@aihot/backend/providers/receipts";
+import { stopBoss } from "@aihot/backend/jobs/queue";
+after(async()=>{await stopBoss();await closeDb();});
+test("releasing an actual analysis-step receipt requeues the failed article once",async()=>{
+ const source=`recovery-${tag()}`;
+ await sql`INSERT INTO sources(id,name,kind) VALUES(${source},'local recovery','rss')`;
+ const {articleId}=await upsertMaterial({sourceId:source,url:`https://example.com/${tag()}`,title:'测试材料',bodyText:'本地测试正文',bodyStatus:'ok',via:'fetch'});
+ const subject=`article:${articleId}@1`;
+ await assert.rejects(paidRequest({service:'local-recovery',purpose:'score_article',subject,identity:{id:articleId}},()=>Promise.reject(new Error('lost after sending'))));
+ await sql`UPDATE articles SET processing_state='failed' WHERE id=${articleId}`;
+ const [r]=await sql<{id:number}[]>`SELECT id FROM receipts WHERE subject=${subject}`;
+ const released=await releaseReceipt(r!.id,{billed:false,note:'local test confirms rejection'},'test');
+ assert.equal(released!.requeued,true);
+ const [a]=await sql<{processing_state:string}[]>`SELECT processing_state FROM articles WHERE id=${articleId}`;
+ assert.equal(a!.processing_state,'new');
+ await assert.rejects(releaseReceipt(r!.id,{billed:false,note:'twice'},'test'),/只有结果未知/);
+});
+test("releasing an urgency receipt retries the notification without reanalysing the article", async () => {
+ const source=`urgent-recovery-${tag()}`;
+ await sql`INSERT INTO sources(id,name,kind) VALUES(${source},'urgent recovery','rss')`;
+ const {articleId}=await upsertMaterial({sourceId:source,url:`https://example.com/${tag()}`,title:'通知材料',bodyText:'原始正文',bodyStatus:'ok',via:'fetch'});
+ await sql`UPDATE articles SET processing_state='analyzed' WHERE id=${articleId}`;
+ const subject=`urgent:${articleId}:test-input`;
+ await assert.rejects(paidRequest({service:'local-recovery',purpose:'notification_urgent',subject,identity:{id:articleId}},()=>Promise.reject(new Error('lost after sending'))));
+ const [r]=await sql<{id:number}[]>`SELECT id FROM receipts WHERE subject=${subject}`;
+ const released=await releaseReceipt(r.id,{billed:false,note:'local notification test'},'test');
+ assert.equal(released!.requeued,true);
+ const [a]=await sql<{processing_state:string}[]>`SELECT processing_state FROM articles WHERE id=${articleId}`;
+ assert.equal(a.processing_state,'analyzed');
+ await assert.rejects(releaseReceipt(r.id,{billed:false,note:'twice'},'test'),/只有结果未知/);
+});

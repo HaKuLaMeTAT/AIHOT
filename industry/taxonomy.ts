@@ -14,6 +14,11 @@ export const CATEGORIES = [
   { key: "paper", label: "论文", section: "论文研究", guide: "研究论文、技术报告、基准与数据集" },
   { key: "tip", label: "教程", section: "技巧与观点", guide: "教程、实践经验、使用技巧、提示词与工具用法、深度技术讲解" },
   { key: "opinion", label: "观点", section: "技巧与观点", guide: "人物观点、评论、分析、访谈、现象与趋势讨论" },
+  { key: "stock-policy", label: "政策监管", section: "股市 · 政策监管", guide: "资本市场制度、证券监管与交易规则；AI 专项监管使用 industry" },
+  { key: "stock-company", label: "公司公告", section: "股市 · 公司公告", guide: "上市公司财报、业绩预告、重大合同、重组、回购、分红及重大经营变化" },
+  { key: "stock-industry", label: "行业产业", section: "股市 · 行业产业", guide: "影响上市公司或产业链的供需、产能、技术与产业政策变化；AI 技术新品仍用 AI 类别" },
+  { key: "stock-market", label: "市场异动", section: "股市 · 市场异动", guide: "有交易所、行情数据或公开原始依据的市场异常波动、停复牌与风险提示" },
+  { key: "stock-macro", label: "宏观事件", section: "股市 · 宏观事件", guide: "央行、利率、汇率、财政、经济数据及影响股票市场的宏观事件" },
 ] as const;
 
 /**
@@ -27,12 +32,12 @@ export const ITEM_TYPES = ["model_release", "product_launch", "tool_or_prompt", 
 /** 每篇资料的第一个标签必须是这些“分类标签”之一。 */
 export const CATEGORY_TAGS = [
   "产品更新", "模型发布", "论文/研究", "开源/仓库", "教程/实践", "现象/趋势", "大佬观点", "评测/基准", "安全/对齐", "行业动态", "政策/监管",
-  "非AI/通用工具", "其他",
+  "非AI/通用工具", "其他", "证券政策/监管", "公司公告", "行业产业", "市场异动", "宏观事件",
 ] as const;
 
 /** 可选的主题标签。 */
 export const TOPIC_TAGS = [
-  "Agent", "编码", "推理", "多模态", "语音", "视频", "图像生成", "RAG", "端侧", "数据/训练", "搜索", "部署/工程", "开源生态", "具身智能", "MCP/工具调用",
+  "Agent", "编码", "推理", "多模态", "语音", "视频", "图像生成", "RAG", "端侧", "数据/训练", "搜索", "部署/工程", "开源生态", "具身智能", "MCP/工具调用", "A股", "港股", "美股", "财报", "重组并购", "货币政策", "产业链",
 ] as const;
 
 /** 可选的实体标签（公司、机构、平台）。 */

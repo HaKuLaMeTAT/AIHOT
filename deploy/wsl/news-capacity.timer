@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly personal news capacity check
+PartOf=news-runtime.target
+[Timer]
+OnActiveSec=2min
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+Unit=news-capacity.service
+[Install]
+WantedBy=news-runtime.target

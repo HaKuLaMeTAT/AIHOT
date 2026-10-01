@@ -2,10 +2,13 @@
 .env.*
 !.env.example
 node_modules/
+node_modules
 dist/
 .cache/
 .DS_Store
 .data/
+.runtime/
+__pycache__/
 
 # Web production build
 apps/web/build/
@@ -14,3 +17,10 @@ apps/web/.react-router/
 # Font package unpacked to regenerate the report nameplates (docs/customize.md)
 package/
 fontsource-noto-sans-sc-*.tgz
+
+# Private operator notes and local credential files
+/handoff/
+.secrets/
+*.key
+*.p12
+*.pfx

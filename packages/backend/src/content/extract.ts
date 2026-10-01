@@ -11,6 +11,7 @@ import { getArticle } from "../providers/socialdata.ts";
 import { onlyXArticleLink, xArticleText } from "../sources/x.ts";
 import { sanitizeBody, trimTrailingChrome } from "./sanitize.ts";
 import { contentHash } from "./materials.ts";
+import { extractSecFiling } from "./sec-filing.ts";
 
 export interface ExtractedBody {
   html: string;
@@ -105,11 +106,12 @@ export function pageFetchable(url: string, sourceKind: string): boolean {
 
 /** Fetches and stores the body of one article. Unconfirmed bodies are recorded as such. */
 export async function extractArticleBody(articleId: string, allowJina = process.env.JINA_BODY_FALLBACK !== "false"): Promise<"ok" | "unconfirmed" | "skipped"> {
-  const [a] = await sql<{ id: string; url: string; body_status: string; revision: number; x_post: { tweetId?: string } | null }[]>`
-    SELECT id, url, body_status, revision, x_post FROM articles WHERE id = ${articleId}`;
+  const [a] = await sql<{ id: string; source_id: string; url: string; body_status: string; revision: number; x_post: { tweetId?: string } | null }[]>`
+    SELECT id, source_id, url, body_status, revision, x_post FROM articles WHERE id = ${articleId} AND raw_retired_at IS NULL`;
   if (!a || a.body_status === "ok") return "skipped";
   if (a.x_post?.tweetId) return extractXArticle(a.id, a.x_post.tweetId);
-  const got = await extractFromUrl(a.url, { allowJina, subject: `article:${a.id}` });
+  const got = a.source_id.startsWith("stock-us-sec-") ? await extractSecFiling(a.url)
+    : await extractFromUrl(a.url, { allowJina, subject: `article:${a.id}` });
   if (!got) {
     await sql`UPDATE articles SET body_status = 'unconfirmed', updated_at = now() WHERE id = ${articleId} AND body_status <> 'ok'`;
     return "unconfirmed";

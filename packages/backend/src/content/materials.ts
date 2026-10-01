@@ -155,11 +155,13 @@ async function upsertIn(db: Db, m: MaterialInput): Promise<MaterialResult> {
     return { articleId: newId, created: true, revised: false, backfill: t.backfill };
   }
 
-  const [existing] = await db<{ id: string; source_id: string; revision: number; content_hash: string | null; backfill: boolean; title: string; body_text: string | null; excerpt: string | null }[]>`
-    SELECT id, source_id, revision, content_hash, backfill, title, body_text, excerpt FROM articles WHERE identity_key = ${identityKey} FOR UPDATE`;
+  const [existing] = await db<{ id: string; source_id: string; revision: number; content_hash: string | null; backfill: boolean; title: string; body_text: string | null; excerpt: string | null; raw_retired_at: Date | null }[]>`
+    SELECT id, source_id, revision, content_hash, backfill, title, body_text, excerpt, raw_retired_at FROM articles WHERE identity_key = ${identityKey} FOR UPDATE`;
   await db`INSERT INTO article_discoveries (article_id, source_id, via, discovered_at)
            VALUES (${existing!.id}, ${m.sourceId}, ${m.via}, ${discoveredAt}) ON CONFLICT DO NOTHING`;
   const unchanged: MaterialResult = { articleId: existing!.id, created: false, revised: false, backfill: existing!.backfill };
+  // An old listing must not refill retired bodies or trigger another paid judgement on a summary.
+  if (existing!.raw_retired_at) return unchanged;
   // Another source listing the same material (an aggregator, a translated mirror, a hot signal) is a
   // discovery only: its title and summary are its own rendering, and taking them made the article flip
   // between the two sources' versions on every fetch. Only the article's own source revises it.

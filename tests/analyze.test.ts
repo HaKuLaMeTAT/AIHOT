@@ -3,13 +3,13 @@
 // understanding and the rest by the title/summary prompts, a structure step gives the category, subjects
 // and fact. Material with only a feed summary has its page fetched first. The steps run on the models
 // AIHOT assigns them (set through the environment here); every prompt in the pack renders.
-import { Reply, stub, tag } from "./setup.ts";
+import { enableLocalModelStub, Reply, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
-import { analyzeArticle, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
+import { analyzeArticle, parseScoreOutput, ScoreSchema, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
 import { queueProcessing } from "@aihot/backend/jobs/content";
 import { QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 import { compactAnswerFirstSummary, enforceIdentity, parseTranslateOutput, PREFILTER_SYSTEM } from "@aihot/backend/editorial/writing";
@@ -23,11 +23,11 @@ const X_SOURCE = `test-analyze-x-${T}`;
 type Step = "prefilter" | "score" | "understand" | "summarize" | "structure";
 interface Req { step: Step; marker: string; system: string; user: string; body: Record<string, any> }
 const requests: Req[] = [];
-const MARKERS = ["CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
-const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
+const MARKERS = ["NUMERIC", "CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
+const scoreAnswers: Record<string, number[]> = { NUMERIC: [78, 72], CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
 
 const stepOf = (system: string, user: string): Step =>
-  system.includes("宽召回的AI相关性预筛") ? "prefilter" : system.includes("事件注意力评分器") ? "score"
+  system.includes("宽召回的 AI 与股市相关性预筛") ? "prefilter" : system.includes("事件注意力评分器") ? "score"
   : system.includes("内容理解编辑") ? "understand" : system.includes("资料结构化助手") ? "structure"
   : user.includes("title_zh") ? "summarize" : (() => { throw new Error("unknown request"); })();
 
@@ -42,7 +42,10 @@ const provider = await stub((_hit, req) => {
   requests.push({ step, marker, system, user, body });
   const answer = (content: unknown) => ({ id: `stub-${requests.length}`, model: "stub", choices: [{ message: { content: typeof content === "string" ? content : JSON.stringify(content) } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
   if (step === "prefilter") return answer({ label: marker === "OFFTOPIC" || marker === "BARE" ? "BLOCK" : marker === "VAGUE" ? "UNKNOWN" : "PASS", reason: "测试" });
-  if (step === "score") return answer({ attentionScore: scoreAnswers[marker]!.shift() });
+  if (step === "score") {
+    const score = scoreAnswers[marker]!.shift();
+    return answer(marker === "NUMERIC" ? String(score) : { attentionScore: score });
+  }
   if (step === "understand") {
     if (marker === "SENSITIVE") return new Reply(400, { contentFilter: [{ level: 1, role: "user" }], error: { code: "1301", message: "系统检测到输入或生成内容可能包含不安全或敏感内容" } });
     return answer({ itemType: "model_release", authorRole: "principal", tags: ["模型发布", "开源", "Agent", "不存在的标签"], editorialJudgment: `理由 ${marker}`, titleZh: `理解标题 ${marker}`, summaryZh: `理解摘要 ${marker}。第二句补充一个关键数字。` });
@@ -56,6 +59,7 @@ for (const env of ["DASHSCOPE_API_KEY", "ZHIPU_API_KEY", "DEEPSEEK_API_KEY"]) pr
 Object.assign(process.env, { PREFILTER_MODEL: "qwen3.7-flash", SCORE_MODEL: "glm-5.3-flash-selection", UNDERSTAND_MODEL: "glm-5.3-flash", SUMMARIZE_MODEL: "deepseek-flash", STRUCTURE_MODEL: "qwen3.8-flash" });
 
 before(async () => {
+  await enableLocalModelStub(provider.url);
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at) VALUES
     (${SOURCE}, 'Test analyze source', 'rss', 'T1', 'editorial', '2100-01-01'),
     (${X_SOURCE}, 'Test X account', 'x_search', 'T1', 'editorial', '2100-01-01')`;
@@ -88,7 +92,7 @@ test("every prompt in the pack renders, and the site's name replaces AIHOT's", (
     const text = promptText(file.slice(0, -3), values);
     assert.ok(text.length > 20 && !/\{\{/.test(text), file);
   }
-  assert.ok(PREFILTER_SYSTEM.startsWith(`为${SITE.name}做宽召回的AI相关性预筛`));
+  assert.ok(PREFILTER_SYSTEM.startsWith(`为${SITE.name}做宽召回的 AI 与股市相关性预筛`));
 });
 
 test("a selected item: prefilter, two scores, the content understanding and the structure", async () => {
@@ -195,4 +199,20 @@ test("analysing the same revision again reuses every paid answer", async () => {
   const again = await analyzeArticle(id);
   assert.equal(provider.hits(), hits, "no new requests");
   assert.deepEqual([again!.reused, again!.receiptIds], [true, first!.receiptIds]);
+});
+
+
+test("complete bare scores use the normal two-score pipeline without extra paid calls", async () => {
+  const result = await analyzeArticle(await article("NUMERIC"));
+  assert.deepEqual([result!.output!.selected, result!.output!.score], [true, 75]);
+  assert.deepEqual(calls("NUMERIC").sort(), ["prefilter", "score", "score", "structure", "understand"]);
+});
+
+test("score parsing accepts only bounded complete integers or complete score objects", () => {
+  for (const value of ["0", "34", "71", "100", "```json\n58\n```", '{"attentionScore":78}']) {
+    assert.ok(ScoreSchema.safeParse(parseScoreOutput(value)).success);
+  }
+  for (const value of ["101", "-1", "71.5", "score: 71", "071", '{"attentionScore":71', '{"attentionScore":']) {
+    assert.throws(() => parseScoreOutput(value));
+  }
 });

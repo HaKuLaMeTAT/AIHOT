@@ -573,6 +573,56 @@
         "safety",
         "trends"
       ]
+    },
+    {
+      "slug": "stock-policy",
+      "name": "政策监管",
+      "group": "genre",
+      "tags": [
+        "证券政策/监管"
+      ],
+      "definition": "资本市场制度、证券监管与交易规则；AI 专项监管使用 industry",
+      "related": []
+    },
+    {
+      "slug": "stock-company",
+      "name": "公司公告",
+      "group": "genre",
+      "tags": [
+        "公司公告"
+      ],
+      "definition": "上市公司财报、业绩预告、重大合同、重组、回购、分红及重大经营变化",
+      "related": []
+    },
+    {
+      "slug": "stock-industry",
+      "name": "行业产业",
+      "group": "genre",
+      "tags": [
+        "行业产业"
+      ],
+      "definition": "影响上市公司或产业链的供需、产能、技术与产业政策变化；AI 技术新品仍用 AI 类别",
+      "related": []
+    },
+    {
+      "slug": "stock-market",
+      "name": "市场异动",
+      "group": "genre",
+      "tags": [
+        "市场异动"
+      ],
+      "definition": "有交易所、行情数据或公开原始依据的市场异常波动、停复牌与风险提示",
+      "related": []
+    },
+    {
+      "slug": "stock-macro",
+      "name": "宏观事件",
+      "group": "genre",
+      "tags": [
+        "宏观事件"
+      ],
+      "definition": "央行、利率、汇率、财政、经济数据及影响股票市场的宏观事件",
+      "related": []
     }
   ]
 }

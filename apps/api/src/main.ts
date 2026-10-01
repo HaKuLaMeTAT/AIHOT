@@ -3,6 +3,7 @@ import { closeDb } from "@aihot/backend/db";
 import { startHeartbeat } from "@aihot/backend/operations/heartbeat";
 import { startWorkerWatchdog } from "@aihot/backend/operations/watch";
 import { buildApp } from "./app.ts";
+import { buildReadingApp } from "./daily/app.ts";
 
 assertProductionSecrets([
   ["auth", "SESSION_SECRET"],
@@ -15,6 +16,8 @@ if (config.environmentName === "production" && !(config.adminPassword && config.
 
 const app = await buildApp();
 await app.listen({ port: config.apiPort, host: process.env.API_HOST || "127.0.0.1" });
+const reading = process.env.DAILY_READING_ENABLED === "true" ? buildReadingApp() : null;
+if (reading) await reading.listen({ port: Number(process.env.DAILY_READING_PORT || 3002), host: "127.0.0.1" });
 startHeartbeat(`api:${config.apiPort}`);
 startWorkerWatchdog();
 
@@ -23,6 +26,7 @@ const shutdown = async () => {
   if (stopping) return;
   stopping = true;
   await app.close();
+  await reading?.close();
 
   await closeDb();
   process.exit(0);

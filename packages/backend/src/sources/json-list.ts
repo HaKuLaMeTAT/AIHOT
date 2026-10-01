@@ -3,6 +3,7 @@ import { credential } from "../config.ts";
 import { guardedFetch } from "../lib/http-fetch.ts";
 import { collapseWhitespace, stripTags } from "../lib/text.ts";
 import { FetchError, type Candidate, type SourceRow } from "./types.ts";
+import { fromSecSubmissions } from "./sec.ts";
 
 export function getPath(obj: unknown, path: string): unknown {
   if (!path) return obj;
@@ -152,6 +153,7 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
       throw new FetchError("response is not JSON");
     }
   }
+  if (c.adapter === "sec_submissions") return fromSecSubmissions(data, source);
   let items = c.itemsPath ? getPath(data, c.itemsPath) : c.jsonKey ? getPath(data, c.jsonKey) : data;
   if (c.itemsObjectValues && items && typeof items === "object" && !Array.isArray(items)) items = Object.values(items);
   if (!Array.isArray(items)) throw new FetchError("items path did not resolve to an array");

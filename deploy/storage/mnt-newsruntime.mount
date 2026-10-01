@@ -1,0 +1,10 @@
+[Unit]
+Description=Personal news data directory on D drive
+
+# Example path and UID/GID: adjust these to your local account before installing.
+[Mount]
+What=D:\\personal-hot\\.runtime
+Where=/mnt/newsruntime
+Type=drvfs
+Options=metadata,uid=1000,gid=1000,umask=077
+TimeoutSec=30

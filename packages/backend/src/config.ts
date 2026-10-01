@@ -44,6 +44,7 @@ export const config = {
   egressProxyUrl: env.EGRESS_PROXY_URL || null,
   allowPrivateNetworkFetch: bool("ALLOW_PRIVATE_NETWORK_FETCH", false),
   feishuContentPushEnabled: bool("FEISHU_CONTENT_PUSH_ENABLED", false),
+  wechatPushEnabled: bool("WECHAT_PUSH_ENABLED", false),
   indexNowSubmitEnabled: bool("INDEXNOW_SUBMIT_ENABLED", false),
   /** IndexNow key (32 hex characters); without one nothing is submitted and no key file is served. */
   indexNowKey: /^[0-9a-f]{32}$/.test(env.INDEXNOW_KEY ?? "") ? env.INDEXNOW_KEY! : null,
@@ -51,6 +52,7 @@ export const config = {
   /** Optional directory of per-group dotenv files (models.env, collectors.env, …); normally everything is in .env. */
   credentialsDir: env.AIHOT_CREDENTIALS_DIR || null,
   dataDir: str("AIHOT_DATA_DIR", path.join(REPO_ROOT, ".data")),
+  bodyRetentionEnabled: bool("BODY_RETENTION_ENABLED", false),
   // Name of this deployment in alerts ("production" sends them without a prefix).
   environmentName: str("AIHOT_ENVIRONMENT", isProduction ? "production" : "development"),
   // Model calls are live unless explicitly disabled (tests, replays).

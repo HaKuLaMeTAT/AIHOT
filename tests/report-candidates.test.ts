@@ -1,4 +1,4 @@
-import { gate, stub, tag } from "./setup.ts";
+import { enableLocalModelStub, gate, stub, tag } from "./setup.ts";
 // A selected item released across the 08:00 boundary must appear in the next issue exactly once.
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -20,6 +20,7 @@ process.env.DEEPSEEK_BASE_URL = `${provider.url}/v1`;
 process.env.DEEPSEEK_API_KEY = "test-key";
 
 before(async () => {
+  await enableLocalModelStub(provider.url);
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at)
             VALUES (${SOURCE}, 'Report boundary test', 'rss', 'T1', 'editorial', '2100-01-01')`;
 });

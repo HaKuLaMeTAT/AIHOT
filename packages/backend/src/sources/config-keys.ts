@@ -15,7 +15,7 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
   json_list: [
     ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
     "titlePaths", "summaryPaths", "summaryIsBody", "authorPaths", "publishedAtPath", "publishedAtUnit", "externalIdPath",
-    "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric",
+    "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric", "adapter", "cik", "ticker",
   ],
   // X accounts are mostly read in shards, which apply only these.
   x_search: ["_aihot", "ingestNoiseFilter", "itemUrlPrefixRewrite", "query", "searchType"],
@@ -25,8 +25,8 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
 
 // Objects with fixed keys (headers and bodyJson are request data, free-form).
 const NESTED: Record<string, string[]> = {
-  _aihot: ["initialBackfillLimit", "initialBackfillMonths"],
-  ingestNoiseFilter: ["dropMarkers", "dropMarkersTitleOnly", "keepIfMatches"],
+  _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxNewItemsPerDay"],
+  ingestNoiseFilter: ["dropMarkers", "dropMarkersTitleOnly", "keepIfMatches", "requireAnyMarkers"],
   itemUrlPrefixRewrite: ["from", "to"],
   requireBoolean: ["path", "equals"],
   minNumeric: ["path", "min"],
@@ -37,7 +37,7 @@ const NESTED: Record<string, string[]> = {
 };
 
 const VALUES: Record<string, string[]> = {
-  adapter: ["mimo_home"],
+  adapter: ["mimo_home", "szse_news", "sec_submissions"],
   parseMode: ["html", "markdown", "docusaurus_changelog"],
 };
 
@@ -45,6 +45,9 @@ const VALUES: Record<string, string[]> = {
 export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string, unknown>): string[] {
   const allowed = new Set(KEYS[kind] ?? []);
   const out: string[] = [];
+  if (config.adapter && ((kind === "json_list" && config.adapter !== "sec_submissions") || (kind === "web_list" && config.adapter === "sec_submissions"))) out.push(`adapter=${String(config.adapter)}`);
+  const cap = (config._aihot as Record<string, unknown> | undefined)?.maxNewItemsPerDay;
+  if (cap !== undefined && (!Number.isInteger(cap) || Number(cap) < 1 || Number(cap) > 60)) out.push("_aihot.maxNewItemsPerDay (1–60 integer required)");
   for (const [key, value] of Object.entries(config ?? {})) {
     if (!allowed.has(key)) out.push(key);
     else if (VALUES[key] && !VALUES[key]!.includes(String(value))) out.push(`${key}=${String(value)}`);

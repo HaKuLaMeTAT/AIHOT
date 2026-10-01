@@ -6,19 +6,25 @@
 import { config, credential } from "../config.ts";
 import { sql } from "../db.ts";
 import { postWebhook } from "./feishu.ts";
+import { sendWechat, templateReady, type WechatMessage } from "./wechat.ts";
+import { recordWechatSend } from "./wechat-callback.ts";
 
 export interface DeliveryRequest {
-  subjectKind: "codex_reset" | "selected";
+  subjectKind: "codex_reset" | "selected" | "daily_report" | "operation";
   subjectId: string;
   dedupeKey: string;
   /** When the underlying content appeared; older than a target's enabled_at means skip. */
   contentAt: Date;
   card: unknown;
+  wechat?: WechatMessage;
+  /** Restrict new notification formats to their intended transport/recipient. */
+  targetKind?: Target["kind"];
+  targetKey?: string;
 }
 
 interface Target {
   key: string;
-  kind: "feishu_webhook" | "feishu_chat" | "log";
+  kind: "feishu_webhook" | "feishu_chat" | "log" | "wechat_template";
   enabled_at: Date | null;
   config_ref: string | null;
 }
@@ -30,18 +36,37 @@ export async function ensureContentTargets() {
       ('feishu-content-main', 'content', 'feishu_webhook', false, 'FEISHU_PUSH_WEBHOOK_URL', '飞书内容主群'),
       ('feishu-content-mirror', 'content', 'feishu_webhook', false, 'FEISHU_PUSH_MIRROR_WEBHOOK_URL', '飞书内容镜像群')
     ON CONFLICT (key) DO NOTHING`;
+  await sql`INSERT INTO notify_targets (key, purpose, kind, enabled, note)
+            VALUES ('wechat-personal', 'content', 'wechat_template', false, '个人微信模板消息') ON CONFLICT (key) DO NOTHING`;
 }
 
 export async function deliverContent(req: DeliveryRequest): Promise<Array<{ target: string; status: string }>> {
   const targets = await sql<Target[]>`SELECT key, kind, enabled_at, config_ref FROM notify_targets WHERE purpose = 'content' AND enabled`;
   const results: Array<{ target: string; status: string }> = [];
   for (const t of targets) {
+    if (req.targetKind && t.kind !== req.targetKind) continue;
+    if (req.targetKey && t.key !== req.targetKey) continue;
     if (t.enabled_at && req.contentAt < t.enabled_at) continue;
+    if (t.kind === "wechat_template" && !req.wechat) continue;
+    if (t.kind === "wechat_template" && !templateReady(req.wechat!)) continue;
+    const payload = t.kind === "wechat_template" ? req.wechat : req.card;
     const [row] = await sql<{ id: number }[]>`
       INSERT INTO deliveries (target_key, subject_kind, subject_id, dedupe_key, status, payload)
-      VALUES (${t.key}, ${req.subjectKind}, ${req.subjectId}, ${req.dedupeKey}, 'pending', ${sql.json(req.card as never)})
+      VALUES (${t.key}, ${req.subjectKind}, ${req.subjectId}, ${req.dedupeKey}, 'pending', ${sql.json(payload as never)})
       ON CONFLICT (target_key, dedupe_key) DO NOTHING RETURNING id`;
     if (!row) continue; // already delivered, skipped or in doubt
+    if (t.kind === "wechat_template") {
+      if (!config.wechatPushEnabled) {
+        await sql`UPDATE deliveries SET status = 'skipped', response = 'WeChat push disabled', updated_at = now() WHERE id = ${row.id}`;
+        results.push({ target: t.key, status: "skipped" });
+        continue;
+      }
+      await sql`UPDATE deliveries SET status = 'sending', attempts = attempts + 1, updated_at = now() WHERE id = ${row.id}`;
+      const result = await sendWechat(req.wechat!);
+      await recordWechatSend(row.id, result);
+      results.push({ target: t.key, status: result.status });
+      continue;
+    }
     if (!config.feishuContentPushEnabled || t.kind !== "feishu_webhook") {
       await sql`UPDATE deliveries SET status = 'skipped', response = 'content push disabled', updated_at = now() WHERE id = ${row.id}`;
       results.push({ target: t.key, status: "skipped" });
@@ -78,6 +103,14 @@ export async function resendDelivery(id: number): Promise<{ status: string }> {
     SELECT d.status, d.payload, d.target_key, t.config_ref, t.kind FROM deliveries d JOIN notify_targets t ON t.key = d.target_key WHERE d.id = ${id}`;
   if (!d) throw new Error(`delivery ${id} not found`);
   if (d.status !== "unknown" && d.status !== "failed") throw new Error(`delivery ${id} is ${d.status}`);
+  if (d.kind === "wechat_template") {
+    if (!config.wechatPushEnabled) throw new Error("WeChat push is disabled in this environment");
+    await sql`UPDATE deliveries SET status = 'sending', attempts = attempts + 1, updated_at = now() WHERE id = ${id}`;
+    const result = await sendWechat(d.payload as WechatMessage);
+    await sql`UPDATE deliveries SET status = ${result.status}, response = ${result.response},
+              sent_at = ${result.status === "sent" ? new Date() : null}, updated_at = now() WHERE id = ${id}`;
+    return { status: result.status };
+  }
   if (!config.feishuContentPushEnabled || d.kind !== "feishu_webhook") throw new Error("content push is disabled in this environment");
   const url = d.config_ref ? credential("integrations", d.config_ref) : undefined;
   if (!url) throw new Error("webhook not configured");
