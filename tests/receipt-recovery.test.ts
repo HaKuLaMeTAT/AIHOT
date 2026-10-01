@@ -5,7 +5,7 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { releaseReceipt } from "@aihot/backend/admin/runs";
 import { paidRequest } from "@aihot/backend/providers/receipts";
-import { stopBoss } from "@aihot/backend/jobs/queue";
+import { QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 after(async()=>{await stopBoss();await closeDb();});
 test("releasing an actual analysis-step receipt requeues the failed article once",async()=>{
  const source=`recovery-${tag()}`;
@@ -34,4 +34,23 @@ test("releasing an urgency receipt retries the notification without reanalysing 
  const [a]=await sql<{processing_state:string}[]>`SELECT processing_state FROM articles WHERE id=${articleId}`;
  assert.equal(a.processing_state,'analyzed');
  await assert.rejects(releaseReceipt(r.id,{billed:false,note:'twice'},'test'),/只有结果未知/);
+});
+
+test("recovered AI and stock analysis stays in its own channel queue", async () => {
+ const previous=process.env.ANALYZE_CHANNELS_ENABLED;
+ process.env.ANALYZE_CHANNELS_ENABLED='true';
+ try {
+  for(const channel of ['ai','stock'] as const) {
+   const source=`${channel==='stock'?'stock-':''}channel-recovery-${tag()}`;
+   await sql`INSERT INTO sources(id,name,kind) VALUES(${source},'channel recovery','rss')`;
+   const {articleId}=await upsertMaterial({sourceId:source,url:`https://example.com/${tag()}`,title:'恢复测试',bodyText:'原始正文',bodyStatus:'ok',via:'fetch'});
+   const subject=`article:${articleId}@1`;
+   await assert.rejects(paidRequest({service:'local-recovery',purpose:'score_article',subject,identity:{id:articleId}},()=>Promise.reject(new Error('lost after sending'))));
+   await sql`UPDATE articles SET processing_state='failed' WHERE id=${articleId}`;
+   const [r]=await sql<{id:number}[]>`SELECT id FROM receipts WHERE subject=${subject}`;
+   assert.equal((await releaseReceipt(r.id,{billed:false,note:'local channel test'},'test'))!.requeued,true);
+   const jobs=await sql<{name:string}[]>`SELECT name FROM pgboss.job WHERE data->>'articleId'=${articleId}`;
+   assert.deepEqual(jobs.map(j=>j.name),[channel==='ai'?QUEUES.analyzeAi:QUEUES.analyzeStock]);
+  }
+ } finally { if(previous===undefined)delete process.env.ANALYZE_CHANNELS_ENABLED;else process.env.ANALYZE_CHANNELS_ENABLED=previous; }
 });

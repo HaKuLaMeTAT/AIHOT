@@ -22,6 +22,17 @@
 
 原有采集、预筛、两次独立评分、中文摘要、结构化与事件归组流程继续使用。增加股市相关提示词和分类，不将股票标题直接当作交易信号。原网站、RSS、公开 API、MCP 的代码保留，可按需要运行。
 
+## 上游修复同步
+
+在原始基线 `885b736` 上选择性吸收以下修复，保留本定制版的模型、微信和双通道实现：
+
+- [异常回执恢复](https://github.com/KKKKhazix/AIHOT/commit/c3ba0ca3c19a7823f431871869083e075fd34caf)：正文提取与各分析阶段按未完成步骤恢复；AI、股市队列和重大事件通知恢复逻辑继续保留。
+- [投递重试防重复](https://github.com/KKKKhazix/AIHOT/pull/19)：人工重发和确认使用状态及版本校验；扩展到微信通道，重发后记录新的消息 ID 并关联对应送达回调。
+- [fflate 依赖修补](https://github.com/KKKKhazix/AIHOT/pull/30)：固定为 `0.7.5`。
+- [暂停信源检查](https://github.com/KKKKhazix/AIHOT/pull/21)与[采集批次校验](https://github.com/KKKKhazix/AIHOT/pull/27)：外部上报尊重信源停用状态，非法请求和条目在写入前拒绝，避免畸形批次部分写入。
+
+这批修复不增加数据库迁移，不调整模型预算、并发、报告时间或资源上限。上游后续功能按实际需求单独评估。
+
 ## AI 与股市分别关注什么
 
 **AI** 覆盖模型、产品、行业、论文、教程和观点。来源包括 OpenAI、Anthropic、Google DeepMind / Research、Hugging Face、Microsoft Research、NVIDIA、Mistral、DeepSeek、Qwen、arXiv，以及技术媒体与研究者博客。重点保留有原始依据的技术发布、能力变化、论文和工程实践，压制广告、重复转发与没有依据的宣传。
@@ -174,7 +185,7 @@ python3 tests/runtime-ops.test.py
 python3 tests/storage-guard.test.py
 ```
 
-这次脱敏源码版本已通过类型检查、网页构建、237 项后端测试（另 1 项跳过）、16 项网页测试及 21 项 Python 测试。Docker 集成检查仍保留在 GitHub 工作流中，信源数量按当前配置核对。
+这次脱敏源码版本已通过类型检查、网页构建、268 项后端测试（另 1 项跳过）、16 项网页测试及 21 项 Python 测试。Docker 集成检查仍保留在 GitHub 工作流中，信源数量按当前配置核对。
 
 ## 源码范围与许可
 

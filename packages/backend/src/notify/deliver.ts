@@ -113,7 +113,7 @@ export async function resendDelivery(id: number, version?: string): Promise<{ st
     if (!config.wechatPushEnabled) throw new Error("WeChat push is disabled in this environment");
   } else {
     if (!config.feishuContentPushEnabled || d.kind !== "feishu_webhook") throw new Error("content push is disabled in this environment");
-    url = d.config_ref ? credential("integrations", d.config_ref) : undefined;
+    url = d.config_ref ? credential("integrations", d.config_ref) ?? undefined : undefined;
     if (!url) throw new Error("webhook not configured");
   }
   // Keep PostgreSQL's timestamp precision: a retry may already have failed again by the time this

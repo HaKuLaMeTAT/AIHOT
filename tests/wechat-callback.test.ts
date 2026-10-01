@@ -101,6 +101,21 @@ test("64-bit IDs survive API parsing and receipts reconcile before or after acce
   assert.equal((await sql`SELECT count(*)::int AS n FROM wechat_delivery_events WHERE message_id=${messageId}`)[0]!.n, 1);
 });
 
+test("a new send replaces the prior attempt's callback and reconciles an early new callback", async () => {
+  const oldId = "200163841", newId = "200163842";
+  const row = await delivery(oldId);
+  await recordWechatSend(row.id, { status: "sent", messageId: oldId, response: "accepted" });
+  await applyWechatDeliveryEvent(event(oldId, "failed:user block"));
+  await applyWechatDeliveryEvent(event(newId));
+  await recordWechatSend(row.id, { status: "sent", messageId: newId, response: "accepted again" });
+  const [saved] = await sql`SELECT wechat_message_id,wechat_delivery_status FROM deliveries WHERE id=${row.id}`;
+  assert.equal(saved.wechat_message_id, newId);
+  assert.equal(saved.wechat_delivery_status, "success");
+  await recordWechatSend(row.id, { status: "unknown", response: "delivery uncertain" });
+  const [unknown] = await sql`SELECT wechat_message_id,wechat_delivery_status,wechat_delivery_at FROM deliveries WHERE id=${row.id}`;
+  assert.deepEqual({ ...unknown }, { wechat_message_id: null, wechat_delivery_status: null, wechat_delivery_at: null });
+});
+
 test("unknown recipients or unknown status cannot alter a delivery", async () => {
   const other = event("1111111"); other.from = "another-user";
   await applyWechatDeliveryEvent(other); await applyWechatDeliveryEvent(event("1111112", "unexpected"));
