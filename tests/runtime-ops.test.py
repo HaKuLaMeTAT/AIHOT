@@ -1,4 +1,5 @@
 import importlib.util
+import fcntl
 import json
 import subprocess
 import tempfile
@@ -31,6 +32,65 @@ class RuntimeOperationsTest(unittest.TestCase):
         if kwargs.get('check') and code:
             raise subprocess.CalledProcessError(code, args)
         return subprocess.CompletedProcess(args, code, output)
+
+    def prepare_main(self, action):
+        config = self.root / 'config'
+        config.mkdir()
+        (config / 'storage.json').write_text(json.dumps({'mount': str(self.root)}))
+        operations = self.root / 'data/operations'
+        operations.mkdir(parents=True)
+        (self.root / 'backups').mkdir()
+        arguments = ['runtime-ops.py', action, '--runtime', str(self.root), '--config', str(config)]
+        return operations, arguments
+
+    def test_backup_waits_for_busy_lock_and_reads_latest_state(self):
+        operations, arguments = self.prepare_main('backup')
+        state_file = operations / 'runtime-state.json'
+        ops.atomic_json(state_file, {'marker': 'before-check'})
+        with (operations / '.lock').open('a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            def finish_check(_):
+                ops.atomic_json(state_file, {'marker': 'after-check'})
+                fcntl.flock(held, fcntl.LOCK_UN)
+            with patch.object(ops.sys, 'argv', arguments), \
+                 patch.object(ops.subprocess, 'run', side_effect=self.run_tool), \
+                 patch.object(ops.shutil, 'disk_usage', return_value=type('Disk', (), {'free': 50 * ops.GIB})()), \
+                 patch.object(ops, 'check_runtime'), patch.object(ops.time, 'sleep', side_effect=finish_check) as waiting, \
+                 patch('builtins.print'):
+                self.assertEqual(ops.main(), 0)
+                waiting.assert_called_once()
+        state = json.loads(state_file.read_text())
+        self.assertEqual(state['marker'], 'after-check')
+        self.assertEqual(Path(state['backup']['file']).read_bytes(), b'valid')
+
+    def test_capacity_check_skips_busy_lock_without_overwriting_state(self):
+        operations, arguments = self.prepare_main('check')
+        state_file = operations / 'runtime-state.json'
+        ops.atomic_json(state_file, {'marker': 'unchanged'})
+        with (operations / '.lock').open('a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(ops.sys, 'argv', arguments), \
+                 patch.object(ops.subprocess, 'run', side_effect=self.run_tool), \
+                 patch.object(ops, 'check_runtime') as check, patch.object(ops.time, 'sleep') as waiting:
+                self.assertEqual(ops.main(), 0)
+                check.assert_not_called()
+                waiting.assert_not_called()
+        self.assertEqual(json.loads(state_file.read_text()), {'marker': 'unchanged'})
+
+    def test_backup_lock_timeout_fails_without_overwriting_state(self):
+        operations, arguments = self.prepare_main('backup')
+        state_file = operations / 'runtime-state.json'
+        ops.atomic_json(state_file, {'marker': 'unchanged'})
+        with (operations / '.lock').open('a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(ops.sys, 'argv', arguments), \
+                 patch.object(ops.subprocess, 'run', side_effect=self.run_tool), \
+                 patch.object(ops.time, 'monotonic', side_effect=[0, 181]), \
+                 patch.object(ops, 'make_backup') as backup:
+                with self.assertRaisesRegex(RuntimeError, 'backup lock'):
+                    ops.main()
+                backup.assert_not_called()
+        self.assertEqual(json.loads(state_file.read_text()), {'marker': 'unchanged'})
 
     def test_alert_thresholds_and_recovery_do_not_repeat(self):
         state = {}

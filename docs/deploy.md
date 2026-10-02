@@ -146,6 +146,8 @@ node --env-file="$HOME/.config/news-runtime/env" scripts/migrate.ts
 - 日志每小时检查，单份超过 5 MiB 后轮换三份。数据库回执和未知结果不能随意删除，避免重新购买或重复推送。
 - 空间低于 5 GiB 时暂停本项目 worker，恢复到 10 GiB 后只恢复此前由容量监控暂停的 worker；不启动使用者主动停止的服务。
 
+备份与容量检查共用状态锁。两项任务同时触发时，备份最多等待 180 秒后继续；等待超时明确返回失败，不再跳过并报告成功。容量检查遇到正在执行的备份可跳过本轮，备份结束时会再次检查容量并更新状态。
+
 ```bash
 ./scripts/wsl-runtime.sh backup
 ./scripts/wsl-runtime.sh capacity

@@ -203,10 +203,22 @@ def main():
     operations.mkdir(mode=0o700, parents=True, exist_ok=True)
     state_file = operations / 'runtime-state.json'
     with (operations / '.lock').open('a') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return 0
+        deadline = time.monotonic() + 180
+        waiting = False
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if args.action != 'backup':
+                    return 0
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Timed out waiting for the local backup lock')
+                if not waiting:
+                    print(json.dumps({'event': 'runtime.backup.waiting', 'detail': 'Waiting for the running capacity check'}), flush=True)
+                    waiting = True
+                time.sleep(0.25)
+        # Both timers can fire at 03:00. A scheduled backup must not be silently skipped.
         state = json.loads(state_file.read_text()) if state_file.exists() else {}
         if args.action == 'status':
             print(json.dumps(state, ensure_ascii=False, indent=2))
