@@ -32,13 +32,20 @@ export { buildMaterial, loadAnalyzeInput, type AnalyzeInputArticle };
 
 export const PROMPT_VERSIONS = {
   prefilter: promptVersion("prefilter"),
-  score: promptVersion("selection-score"),
+  score: promptVersion("selection-score-ai"),
   understand: promptVersion("understand"),
   summarize: promptVersion("summarize-article", "summarize-article-empty", "summarize-short-post", "summarize-short-post-quoted", "summarize-long-post", "summarize-long-post-quoted", "identity-context"),
   structure: promptVersion("structure"),
 } as const;
 /** Every step's prompt, as stored on each judgement. */
 export const ANALYZE_PROMPT_VERSION = Object.values(PROMPT_VERSIONS).join("+");
+const STOCK_SCORE_VERSION = promptVersion("selection-score");
+
+export function analysisPromptVersion(channel: "ai" | "stock" = "ai"): string {
+  return channel === "stock"
+    ? Object.values({ ...PROMPT_VERSIONS, score: STOCK_SCORE_VERSION }).join("+")
+    : ANALYZE_PROMPT_VERSION;
+}
 
 // ── Scoring ───────────────────────────────────────────────────────────────────────────────
 
@@ -49,8 +56,9 @@ export const SCORE_CALLS = 2;
  * The thresholds on the mean score, per source tier (industry/selection.ts): selected when
  * score1 + score2 >= 2 × threshold. Tiers without a threshold are not scored for 精选.
  */
-export function tierThreshold(tier: string): number | null {
-  return SELECTION.thresholds[tier] ?? null;
+export function tierThreshold(tier: string, channel: "ai" | "stock" = "ai"): number | null {
+  const base = SELECTION.thresholds[tier];
+  return base === undefined ? null : SELECTION.channelThresholds[channel]?.[tier] ?? base;
 }
 
 /** Unselected items above this mean are written like selected ones. */
@@ -65,8 +73,9 @@ const SCORE_CALL: Record<string, { temperature: number; maxTokens: number; timeo
 };
 const scoreCall = (model: string) => SCORE_CALL[model] ?? { temperature: 0.2, maxTokens: 1024, timeoutMs: 120_000 };
 
-/** The score prompt: the industry's taste (industry/prompts/selection-score.md). */
-export const SCORE_SYSTEM = promptText("selection-score");
+/** Channel-specific taste from industry/prompts/selection-score*.md. */
+export const SCORE_SYSTEM = promptText("selection-score-ai");
+const STOCK_SCORE_SYSTEM = promptText("selection-score");
 
 export const ScoreSchema = z.object({ attentionScore: z.coerce.number().int().min(0).max(100) });
 const ScoreOutputSchema = { type: "object", properties: { attentionScore: { type: "integer", minimum: 0, maximum: 100 } },
@@ -232,6 +241,7 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
   const model = opts.scoreModel ?? (await modelFor("score"));
   const call = scoreCall(model);
   const input = buildScoreInput(a);
+  const stock = a.channel === "stock";
   const values: number[] = [];
   const receiptIds: number[] = [];
   let reused = true;
@@ -240,7 +250,8 @@ async function runScores(a: AnalyzeInputArticle, threshold: number, opts: StepOp
     checkAnalysisRunning();
     try {
       const res = await chatJson({
-        model, purpose: "score_article", subject: subjectOf(a), promptVersion: PROMPT_VERSIONS.score, system: SCORE_SYSTEM, user: input,
+        model, purpose: "score_article", subject: subjectOf(a), promptVersion: stock ? STOCK_SCORE_VERSION : PROMPT_VERSIONS.score,
+        system: stock ? STOCK_SCORE_SYSTEM : SCORE_SYSTEM, user: input,
         schema: ScoreSchema, parse: parseScoreOutput, codexOutputSchema: ScoreOutputSchema, temperature: call.temperature, maxTokens: call.maxTokens, timeoutMs: call.timeoutMs,
         // Each call is its own paid request; an explicit re-evaluation gets new ones.
         attemptTag: tagged(opts.attemptTag, `score-${i + 1}`),
@@ -358,7 +369,7 @@ export async function runAnalysis(a: AnalyzeInputArticle, opts: StepOpts & { sta
   const prefilter = await runPrefilter(a, opts);
   // UNKNOWN is let through (its material is as complete as it will get); BLOCK stops here.
   if (prefilter.label === "BLOCK") return { prefilter, scores: null, writing: null, structure: null };
-  const threshold = tierThreshold(a.source.tier);
+  const threshold = tierThreshold(a.source.tier, a.channel);
   if (opts.stages === "selection") {
     const scores = threshold === null ? null : await runScores(a, threshold, opts);
     return { prefilter, scores, writing: null, structure: null };
@@ -458,7 +469,7 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
         subjects, title_zh, summary_zh, reason_zh, score, selected, output)
-      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${ANALYZE_PROMPT_VERSION}, ${receiptIds},
+      VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${analysisPromptVersion(input.channel)}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
         ${out.score}, ${out.selected}, ${tx.json(detail as never)})
       RETURNING id`;

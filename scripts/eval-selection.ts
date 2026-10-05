@@ -11,7 +11,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { REPO_ROOT } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
-import { ANALYZE_PROMPT_VERSION, normalizeAnalysis, runAnalysis, type AnalyzeInputArticle } from "@aihot/backend/editorial/analyze";
+import { analysisPromptVersion, normalizeAnalysis, runAnalysis, type AnalyzeInputArticle } from "@aihot/backend/editorial/analyze";
 import { importSelectBenchRun } from "@aihot/backend/admin/selectbench";
 
 const { values } = parseArgs({
@@ -30,7 +30,7 @@ const { values } = parseArgs({
 interface GoldRow {
   caseId: string;
   material: { title: string; originalTitle: string | null; publishedAt: string | null; sourceName: string; bodyZh: string | null; bodyOriginal: string | null };
-  sourceFacts: { sourceKind: string; sourceTier?: string; firstParty?: boolean; language?: string | null };
+  sourceFacts: { sourceKind: string; sourceTier?: string; firstParty?: boolean; language?: string | null; channel?: "ai" | "stock" };
   /** Optional: a split (e.g. development / holdout) and a stratum for reading the mistakes. */
   samplingContext?: { benchmarkSplit?: string; samplingStratum?: string };
   gold: { decision: "select" | "reject" | "either" };
@@ -56,6 +56,7 @@ function toInput(r: GoldRow): AnalyzeInputArticle {
   return {
     id: `gold-${r.caseId}`,
     revision: 1,
+    channel: r.sourceFacts.channel ?? "ai",
     bodyStatus: "ok",
     title: m.originalTitle || m.title,
     url: "https://example.invalid/" + r.caseId,
@@ -157,7 +158,8 @@ for (const model of values.models!.split(",")) {
 const outDir = path.join(REPO_ROOT, ".data/eval");
 mkdirSync(outDir, { recursive: true });
 const file = path.join(outDir, `selection-${values.split}-${values.n}-${Date.now()}.json`);
-const meta = { split: values.split, n: sample.length, seed: Number(values.seed), promptVersion: ANALYZE_PROMPT_VERSION, createdAt: new Date().toISOString() };
+const meta = { split: values.split, n: sample.length, seed: Number(values.seed),
+  promptVersion: [...new Set(sample.map((r) => analysisPromptVersion(r.sourceFacts.channel)))].join(" | "), createdAt: new Date().toISOString() };
 writeFileSync(file, JSON.stringify({ meta, models: report }, null, 2));
 console.log(`report: ${file}`);
 if (!values["no-import"]) {

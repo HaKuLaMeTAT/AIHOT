@@ -1,5 +1,6 @@
 // What the judging steps read about an article: loaded once per analysis and rendered per step.
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
+import { processingChannel } from "@aihot/industry/processing";
 import { sql } from "../db.ts";
 import { collapseWhitespace, truncate } from "../lib/text.ts";
 import { produceImage } from "../media/images.ts";
@@ -8,6 +9,8 @@ import type { ContentPart } from "../providers/llm.ts";
 export interface AnalyzeInputArticle {
   id: string;
   revision: number;
+  /** Trusted source ownership; omitted inputs use the default AI channel. */
+  channel?: "ai" | "stock";
   title: string;
   url: string;
   author: string | null;
@@ -46,12 +49,12 @@ export function withXArticle(xPost: Record<string, any> | null, article: { title
 
 export async function loadAnalyzeInput(articleId: string): Promise<AnalyzeInputArticle | null> {
   const [row] = await sql<{
-    id: string; revision: number; title: string; url: string; author: string | null; published_at: Date | null; discovered_at: Date;
+    id: string; revision: number; source_id: string; title: string; url: string; author: string | null; published_at: Date | null; discovered_at: Date;
     body_text: string | null; excerpt: string | null; body_status: string; x_post: Record<string, any> | null; x_article: { title?: string; text?: string } | null;
     media: Array<Record<string, any>>; source_name: string; source_kind: string; tier: string; first_party: boolean; source_tags: string[]; owner_entity_id: string | null;
     config: Record<string, any>; translation_zh: string | null;
   }[]>`
-    SELECT a.id, a.revision, a.title, a.url, a.author, a.published_at, a.discovered_at, a.body_text, a.excerpt, a.body_status, a.x_post, a.x_article, a.media,
+    SELECT a.id, a.revision, a.source_id, a.title, a.url, a.author, a.published_at, a.discovered_at, a.body_text, a.excerpt, a.body_status, a.x_post, a.x_article, a.media,
            s.name AS source_name, s.kind AS source_kind, s.tier, s.first_party, s.tags AS source_tags, s.owner_entity_id, s.config,
            tr.body_text AS translation_zh
     FROM articles a JOIN sources s ON s.id = a.source_id
@@ -59,7 +62,7 @@ export async function loadAnalyzeInput(articleId: string): Promise<AnalyzeInputA
     WHERE a.id = ${articleId} AND a.raw_retired_at IS NULL`;
   if (!row) return null;
   return {
-    id: row.id, revision: row.revision, title: row.title, url: row.url, author: row.author, publishedAt: row.published_at, discoveredAt: row.discovered_at,
+    id: row.id, revision: row.revision, channel: processingChannel(row.source_id), title: row.title, url: row.url, author: row.author, publishedAt: row.published_at, discoveredAt: row.discovered_at,
     bodyText: row.body_text, excerpt: row.excerpt, bodyStatus: row.body_status, xPost: withXArticle(row.x_post, row.x_article), media: row.media,
     source: {
       name: row.source_name, kind: row.source_kind, tier: row.tier, firstParty: row.first_party, tags: row.source_tags, ownerEntityId: row.owner_entity_id,

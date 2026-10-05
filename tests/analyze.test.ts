@@ -9,7 +9,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
-import { analyzeArticle, parseScoreOutput, ScoreSchema, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
+import { analyzeArticle, analysisPromptVersion, parseScoreOutput, ScoreSchema, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
 import { queueProcessing } from "@aihot/backend/jobs/content";
 import { QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 import { compactAnswerFirstSummary, enforceIdentity, parseTranslateOutput, PREFILTER_SYSTEM } from "@aihot/backend/editorial/writing";
@@ -19,12 +19,14 @@ import { SITE } from "@aihot/industry/site";
 const T = tag();
 const SOURCE = `test-analyze-${T}`;
 const X_SOURCE = `test-analyze-x-${T}`;
+const AI_MEDIA_SOURCE = `test-analyze-media-${T}`;
+const STOCK_MEDIA_SOURCE = `stock-test-analyze-media-${T}`;
 
 type Step = "prefilter" | "score" | "understand" | "summarize" | "structure";
 interface Req { step: Step; marker: string; system: string; user: string; body: Record<string, any> }
 const requests: Req[] = [];
-const MARKERS = ["NUMERIC", "CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
-const scoreAnswers: Record<string, number[]> = { NUMERIC: [78, 72], CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
+const MARKERS = ["AIMEDIA", "AIHALF", "STOCKMEDIA", "NUMERIC", "CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
+const scoreAnswers: Record<string, number[]> = { AIMEDIA: [70, 70], AIHALF: [69, 70], STOCKMEDIA: [70, 70], NUMERIC: [78, 72], CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
 
 const stepOf = (system: string, user: string): Step =>
   system.includes("宽召回的 AI 与股市相关性预筛") ? "prefilter" : system.includes("事件注意力评分器") ? "score"
@@ -62,7 +64,9 @@ before(async () => {
   await enableLocalModelStub(provider.url);
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at) VALUES
     (${SOURCE}, 'Test analyze source', 'rss', 'T1', 'editorial', '2100-01-01'),
-    (${X_SOURCE}, 'Test X account', 'x_search', 'T1', 'editorial', '2100-01-01')`;
+    (${X_SOURCE}, 'Test X account', 'x_search', 'T1', 'editorial', '2100-01-01'),
+    (${AI_MEDIA_SOURCE}, 'Test AI media', 'rss', 'T2', 'editorial', '2100-01-01'),
+    (${STOCK_MEDIA_SOURCE}, 'Test stock media', 'rss', 'T2', 'editorial', '2100-01-01')`;
 });
 after(async () => {
   await provider.close();
@@ -93,6 +97,33 @@ test("every prompt in the pack renders, and the site's name replaces AIHOT's", (
     assert.ok(text.length > 20 && !/\{\{/.test(text), file);
   }
   assert.ok(PREFILTER_SYSTEM.startsWith(`为${SITE.name}做宽召回的 AI 与股市相关性预筛`));
+});
+
+test("AI media uses the trial prompt and 70-point boundary; stock media keeps its original policy", async () => {
+  assert.equal(tierThreshold("T2", "ai"), 70);
+  assert.equal(tierThreshold("T2", "stock"), 76);
+  assert.equal(tierThreshold("EXCLUDE_MP", "ai"), null);
+  for (const channel of ["ai", "stock"] as const) {
+    assert.equal(tierThreshold("T1", channel), 60);
+    assert.equal(tierThreshold("T1_5", channel), 65);
+  }
+  for (const [marker, sourceId, selected, threshold] of [
+    ["AIMEDIA", AI_MEDIA_SOURCE, true, 70],
+    ["AIHALF", AI_MEDIA_SOURCE, false, 70],
+    ["STOCKMEDIA", STOCK_MEDIA_SOURCE, false, 76],
+  ] as const) {
+    const id = await article(marker, { sourceId });
+    const result = await analyzeArticle(id);
+    assert.equal(result!.output!.selected, selected, marker);
+    const analysis = await row(id);
+    assert.equal(analysis.output.threshold, threshold, marker);
+    const score = requests.find((r) => r.marker === marker && r.step === "score")!;
+    const stock = marker === "STOCKMEDIA";
+    assert.equal(score.system, stock ? promptText("selection-score") : SCORE_SYSTEM);
+    assert.equal(score.system.includes("AI 个人读者的具体关注点"), !stock);
+    const [stored] = await sql<{ prompt_version: string }[]>`SELECT prompt_version FROM analyses WHERE article_id=${id} ORDER BY id DESC LIMIT 1`;
+    assert.equal(stored!.prompt_version, analysisPromptVersion(stock ? "stock" : "ai"));
+  }
 });
 
 test("a selected item: prefilter, two scores, the content understanding and the structure", async () => {
