@@ -150,6 +150,7 @@ function RssTab({ base }: { base: string }) {
 function ApiTab({ base }: { base: string }) {
   const endpoints: Array<[string, string]> = [
     ["/api/v1/items", "精选或最近 7 天公开动态；支持分类、时间和关键词"],
+    ["/api/v1/stock/announcements", "按市场、证券代码和日期查询公告索引及扫描覆盖状态；未检出不表示没有公告"],
     ...(FEATURES.codexResetMonitor
       ? ([
           ["/api/v1/codex-resets/recent", "Codex 重置监控（轮询用）：最近 7 天与尚未落地的预告"],

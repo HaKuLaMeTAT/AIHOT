@@ -18,7 +18,7 @@ export async function loadLlmsAvailability() {
 
 export const PUBLIC_VERSIONS = {
   mcp: "2.0.0",
-  v1OpenApi: "2.0.0",
+  v1OpenApi: "2.1.0",
 };
 
 export function llmsTxt(opts: { hasDailies: boolean; hasWeekly: boolean; hasMonthly: boolean; hasLeaderboard: boolean }): string {
@@ -36,6 +36,7 @@ export function llmsTxt(opts: { hasDailies: boolean; hasWeekly: boolean; hasMont
   if (opts.hasDailies) lines.push(`- [${daily} RSS](${u("/feed/daily.xml")}): 每天 08:00 北京时间发布的${daily}，保留最近 30 期`);
   lines.push(`- [分类 RSS](${u(`/feed/category/${CATEGORY_KEYS[0]}.xml`)}): 按分类订阅精选，slug 支持 ${CATEGORY_KEYS.join(" / ")}`);
   lines.push(`- [公开 API v1 · 最近资讯](${u("/api/v1/items")}): JSON，支持 mode=selected/all、window=24h/7d、by=timeline/published、category、q、limit 与 cursor`);
+  lines.push(`- [公告索引查询](${u("/api/v1/stock/announcements?market=sh&code=600036")}): 按 market、code、from/to 读取巨潮公告索引及逐日扫描覆盖状态，包含基线和未处理正文的公告；空结果不代表没有公告`);
   lines.push(`- [公开 API v1 · 当前热点](${u("/api/v1/hot-topics")}): 热点榜 Top 10；每条含从 1 开始的 rank，links.story 指向事件页`);
   lines.push(`- [公开 API v1 · 事件详情](${u("/api/v1/stories/{publicId}")}): 事件报道时间线与随演化更新的综述；publicId 只来自 hot-topics 的 links.story，不要猜测`);
   if (FEATURES.codexResetMonitor) {

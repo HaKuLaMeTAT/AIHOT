@@ -12,6 +12,7 @@ export const PUBLIC_API_CORS: Record<string, string> = {
 
 /** Cache-Control per v1 operation. */
 export const V1_CACHE_CONTROL = {
+  stockAnnouncements: "public, max-age=60, s-maxage=60, must-revalidate",
   items: "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
   codexResets: "public, max-age=60, s-maxage=60, stale-while-revalidate=60",
   hotTopics: "public, max-age=60, s-maxage=60, stale-while-revalidate=60",

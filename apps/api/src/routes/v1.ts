@@ -1,4 +1,4 @@
-// Public API v1 (long-term). Field shapes follow reference/public-v1.openapi.json 2.0.0 (the paths stay /api/v1).
+// Public API v1 (long-term). Field shapes follow reference/public-v1.openapi.json 2.1.0 (the paths stay /api/v1).
 import { FEATURES } from "@aihot/industry/features";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { V1_CACHE_CONTROL } from "@aihot/contracts/http-policy";
@@ -6,10 +6,11 @@ import { PUBLIC_API_CATEGORY_KEYS, type PublicApiCategoryKey } from "@aihot/cont
 import { InvalidCursorError } from "@aihot/backend/lib/cursor";
 import { SearchBusyError } from "@aihot/backend/publication/pool";
 import { selectedChanges, selectedSnapshot, SnapshotRequiredError, v1Items } from "@aihot/backend/publication/v1";
+import { stockAnnouncements } from "@aihot/backend/publication/stock-announcements";
 import { resolveStory, v1HotTopics, v1Story } from "@aihot/backend/publication/stories";
 import { v1Dailies, v1Daily } from "@aihot/backend/publication/reports";
 import { codexResetsRecent, codexResetsSnapshot } from "@aihot/backend/monitor/read";
-import { isValidDate } from "@aihot/contracts/time";
+import { addDays, beijingDate, isValidDate } from "@aihot/contracts/time";
 import { applyPublicHeaders, QueryError, sendJsonWithEtag, sendProblem, strictQuery } from "../http/respond.ts";
 
 type Handler = (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
@@ -57,6 +58,26 @@ export function publicHandler(fn: Handler): Handler {
 }
 
 export function registerV1(app: FastifyInstance) {
+  app.get("/api/v1/stock/announcements", publicHandler(async (req, reply) => {
+    const q = strictQuery(req, ["market", "code", "from", "to", "limit", "cursor"]);
+    if (q.market === undefined) throw new QueryError("market is required (sh, sz or bj).");
+    const market = enumParam(q.market, "market", ["sh", "sz", "bj"] as const, "sh");
+    const codePattern = market === "sh" ? /^(60|68|90)\d{4}$/ : market === "sz" ? /^(00|20|30)\d{4}$/ : /^(43|83|87|92)\d{4}$/;
+    if (q.code === undefined || !codePattern.test(q.code)) throw new QueryError("code must be a six-digit security code matching market.");
+    const now = new Date(), today = beijingDate(now);
+    const to = q.to ?? today;
+    if (!isValidDate(to)) throw new QueryError("from and to must be real YYYY-MM-DD calendar dates.");
+    const from = q.from ?? addDays(to, -6);
+    if (!isValidDate(from)) throw new QueryError("from and to must be real YYYY-MM-DD calendar dates.");
+    if (from > to || to > today || Date.parse(to) - Date.parse(from) > 30 * 86400000) {
+      throw new QueryError("Dates must be ordered, cover at most 31 days and not be in the future.");
+    }
+    const limit = intParam(q.limit, "limit", 1, 100, 50);
+    const body = await stockAnnouncements({ market, code: q.code, from, to, limit, cursor: q.cursor ?? null }, now);
+    const { asOf, ...etagOf } = body;
+    return sendJsonWithEtag(req, reply, body, { etagPrefix: "v1-stock-announcements", cacheControl: V1_CACHE_CONTROL.stockAnnouncements, etagOf });
+  }));
+
   app.get("/api/v1/items", publicHandler(async (req, reply) => {
     const q = strictQuery(req, ["mode", "category", "window", "by", "q", "limit", "cursor"]);
     const mode = enumParam(q.mode, "mode", ["selected", "all"] as const, "selected");

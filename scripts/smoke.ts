@@ -11,6 +11,7 @@ const PAGES = ["/", "/all", "/hot", "/daily", "/daily/archive", "/topics", "/sta
 const MACHINE: Array<[path: string, type: RegExp]> = [
   ["/api/health", /json/],
   ["/api/v1/items", /json/],
+  ["/api/v1/stock/announcements?market=sh&code=600036", /json/],
   ["/api/v1/hot-topics", /json/],
   ["/api/v1/selected/snapshot", /json/],
   ["/feed.xml", /xml/],
