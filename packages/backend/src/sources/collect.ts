@@ -105,6 +105,15 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     let candidates: Candidate[];
     let nextCursor: Record<string, unknown> = { ...(source.cursor ?? {}) };
     let detail: Record<string, unknown> | null = null;
+    const liveOnly = source.config._aihot?.liveOnly === true;
+    const boundary = nextCursor.liveStartedAt;
+    const liveStartedAt = liveOnly ? new Date(boundary === undefined ? Date.now() : typeof boundary === "string" ? boundary : NaN) : null;
+    if (liveStartedAt && !Number.isFinite(liveStartedAt.getTime())) throw new FetchError("Invalid live-only activation timestamp");
+    if (liveStartedAt && !nextCursor.liveStartedAt) {
+      nextCursor.liveStartedAt = liveStartedAt.toISOString();
+      // Keep the boundary through failed first requests, as for announcement index baselines.
+      await sql`UPDATE sources SET cursor=jsonb_set(coalesce(cursor,'{}'),'{liveStartedAt}',${sql.json(liveStartedAt.toISOString())}) WHERE id=${sourceId}`;
+    }
     if (source.kind === "rss") {
       const rss = await fetchRss(source, opts);
       candidates = rss.candidates;
@@ -126,12 +135,33 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       detail = { pages: x.pages, truncated: x.truncated, backlog: x.backlog.length, backlogPages: x.backlogPages, dropped: x.dropped };
     }
     found = candidates.length;
+    const byIdentity = liveOnly && source.config._aihot?.liveOnlyByIdentity === true;
+    let baselineKeys: Set<string> | null = null;
+    if (byIdentity) {
+      const saved = nextCursor.liveBaselineKeys;
+      if (saved !== undefined && (!Array.isArray(saved) || saved.length > 2000 || saved.some(k => typeof k !== "string"))) throw new FetchError("Invalid live-only identity baseline");
+      const keys = saved ?? [...new Set(candidates.map(c => candidateIdentity(c, sourceId)))];
+      if (keys.length > 2000) throw new FetchError("Live-only identity baseline exceeds limit");
+      baselineKeys = new Set(keys);
+      if (saved === undefined) {
+        nextCursor.liveBaselineKeys = keys;
+        // Date-only updates can be new later on the same day. Keep all initial identities through retries.
+        await sql`UPDATE sources SET cursor=jsonb_set(coalesce(cursor,'{}'),'{liveBaselineKeys}',${sql.json(keys as never)}) WHERE id=${sourceId}`;
+      }
+    }
+
     candidates = candidates.filter((c) => allowed(c.url, source)).map((c) => rewriteUrl(c, source)).filter((c) => !noiseFiltered(c, source));
     // Optional rolling collection window: a large RSS archive must not turn a small personal
     // deployment into months of historical analysis. Unknown dates remain eligible for details.
     const ageHours = Number(process.env.COLLECT_MAX_AGE_HOURS || 0);
     const recent = (c: Candidate) => !(ageHours > 0) || !c.publishedAt || c.publishedAt.getTime() >= Date.now() - ageHours * 3_600_000;
     candidates = candidates.filter(recent);
+    // Opt-in sources start with future dated publications; old feed entries never leak in on run 2.
+    if (liveStartedAt) {
+      const firstDay = liveStartedAt.toISOString().slice(0,10);
+      candidates = candidates.filter(c => c.publishedAt && c.publishedAt.getTime() <= Date.now()
+        && (baselineKeys ? !baselineKeys.has(candidateIdentity(c, sourceId)) && c.publishedAt.toISOString().slice(0,10) >= firstDay : c.publishedAt > liveStartedAt));
+    }
     if (source.config.sortByPublishedAt) candidates.sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
 
     const dailyCap = Number(source.config._aihot?.maxNewItemsPerDay || 0);
@@ -150,7 +180,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
     // First import of a new source: bounded, and archived by source time (never "today", never pushed).
     const backfillLimit = Number(source.config._aihot?.initialBackfillLimit ?? 30);
     const backfillMonths = Number(source.config._aihot?.initialBackfillMonths ?? 12);
-    if (firstImport) {
+    if (firstImport && !liveOnly) {
       const cutoff = Date.now() - backfillMonths * 30 * 86400000;
       candidates = candidates.filter((c) => !c.publishedAt || c.publishedAt.getTime() >= cutoff).slice(0, backfillLimit);
     } else if (source.kind !== "x_search") {
@@ -200,7 +230,7 @@ export async function collectSource(sourceId: string, opts: { force?: boolean } 
       }
     }
 
-    ({ created, revised } = await store(sourceId, candidates.filter(recent), firstImport ? "first-import" : null));
+    ({ created, revised } = await store(sourceId, candidates.filter(recent), firstImport && !liveOnly ? "first-import" : null));
 
     if (firstImport) nextCursor.initializedAt = new Date().toISOString();
     nextCursor.lastOkAt = new Date().toISOString();

@@ -59,6 +59,35 @@ test("paper topic requirements and bounded new items preserve revisions and dedu
   assert.deepEqual(limitNewCandidates(items, "s", known, 0).candidates.map(c => c.title), ["known"]);
   assert.ok(unsupportedConfig("json_list", { adapter: "mimo_home" }).length);
   assert.ok(unsupportedConfig("rss", { _aihot: { maxNewItemsPerDay: 0 } }).length);
+  assert.ok(unsupportedConfig("rss", { _aihot: { liveOnly: "true" } }).length);
+});
+
+test("live-only news keeps its activation through failure and never imports older or undated feed entries", async () => {
+  const saved = config.allowPrivateNetworkFetch; config.allowPrivateNetworkFetch = true;
+  const id = `stock-live-${tag()}`;
+  let fail = true;
+  let fresh: string | null = null;
+  const server = http.createServer((_req,res) => {
+    if (fail) { res.writeHead(503); res.end('local failure'); return; }
+    const entry = (name: string, date: string | null) => `<item><title>${name}</title><link>https://example.com/${id}/${name}</link>${date ? `<pubDate>${date}</pubDate>` : ''}</item>`;
+    res.writeHead(200, { 'content-type':'application/rss+xml' });
+    res.end(`<rss version="2.0"><channel>${entry('old','2020-01-01T00:00:00Z')}${entry('undated',null)}${fresh ? entry('fresh',fresh) : ''}</channel></rss>`);
+  });
+  await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve));
+  try {
+    const port = (server.address() as {port:number}).port;
+    await sql`INSERT INTO sources(id,name,kind,config) VALUES(${id},'local live-only','rss',${sql.json({feedUrl:`http://127.0.0.1:${port}`, _aihot:{liveOnly:true,maxNewItemsPerDay:2}})})`;
+    assert.equal((await collectSource(id)).status, 'failed');
+    const [before] = await sql`SELECT cursor FROM sources WHERE id=${id}`;
+    assert.ok(before.cursor.liveStartedAt);
+    fail=false; fresh=new Date().toISOString();
+    assert.equal((await collectSource(id)).created,1);
+    const rows = await sql`SELECT title,backfill FROM articles WHERE source_id=${id}`;
+    assert.deepEqual(rows.map(r=>[r.title,r.backfill]),[['fresh',false]]);
+    assert.equal((await collectSource(id)).created,0);
+    const [after] = await sql`SELECT cursor FROM sources WHERE id=${id}`;
+    assert.equal(after.cursor.liveStartedAt,before.cursor.liveStartedAt);
+  } finally { config.allowPrivateNetworkFetch=saved; await new Promise<void>(resolve=>server.close(()=>resolve())); }
 });
 
 const mainUrl = "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000073/main.htm";
@@ -110,4 +139,33 @@ test("daily collection caps retain RSS deferred items across day rollover", asyn
     assert.equal((await collectSource(id, { force: true })).created, 1);
     assert.equal((await sql`SELECT count(*)::int AS n FROM articles WHERE source_id=${id}`)[0]!.n, 3);
   } finally { config.allowPrivateNetworkFetch = saved; await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+test("date-only live sources baseline every initial identity and accept a later new section on the same day", async () => {
+  const T = tag(), at = new Date(), date = at.toISOString().slice(0,10);
+  let fresh = false;
+  const server = http.createServer((_req,res) => { res.writeHead(200, {"content-type":"application/rss+xml"}); res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>dated changes</title>
+    <item><title>Initial dated update</title><link>https://example.com/dated-old-${T}</link><pubDate>${date}T00:00:00Z</pubDate></item>
+    <item><title>Archive update</title><link>https://example.com/dated-archive-${T}</link><pubDate>2020-01-01T00:00:00Z</pubDate></item>
+    ${fresh ? `<item><title>Later dated update</title><link>https://example.com/dated-new-${T}</link><pubDate>${date}T00:00:00Z</pubDate></item>` : ''}
+    </channel></rss>`); });
+  await new Promise<void>(resolve => server.listen(0,"127.0.0.1",resolve));
+  const address = server.address() as { port: number };
+  const local = { base: `http://127.0.0.1:${address.port}/feed`, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
+  const saved = config.allowPrivateNetworkFetch; config.allowPrivateNetworkFetch = true;
+  const id = `dated-live-${T}`;
+  try {
+    await sql`INSERT INTO sources(id,name,kind,config,participation_mode) VALUES(${id},'dated live','rss',${sql.json({feedUrl:local.base,_aihot:{liveOnly:true,liveOnlyByIdentity:true,maxNewItemsPerDay:1}})},'editorial')`;
+    assert.equal((await collectSource(id)).created, 0);
+    const [source] = await sql`SELECT cursor FROM sources WHERE id=${id}`;
+    assert.equal(source.cursor.liveBaselineKeys.length, 2);
+    fresh = true;
+    assert.equal((await collectSource(id)).created, 1);
+    const [article] = await sql`SELECT url,backfill,published_at FROM articles WHERE source_id=${id}`;
+    assert.match(article.url, /dated-new/); assert.equal(article.backfill, false);
+    assert.equal(article.published_at.toISOString().slice(0,10), date);
+    assert.equal((await collectSource(id)).created, 0);
+    const [again] = await sql`SELECT cursor FROM sources WHERE id=${id}`;
+    assert.deepEqual(again.cursor.liveBaselineKeys, source.cursor.liveBaselineKeys);
+  } finally { config.allowPrivateNetworkFetch = saved; await local.close(); }
 });

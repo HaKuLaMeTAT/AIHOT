@@ -1,5 +1,5 @@
 {
-  "$comment": "个人热点：22 个 AI 信源、28 个股市信源。美股公司先覆盖 10 家科技/AI 公司，规则过滤 SEC 重大申报；论文和美股申报按来源限流，不改变模型总预算。external 股票来源由 stock.collect 专用任务采集。",
+  "$comment": "个人热点：25 个 AI 信源、39 个股市信源。美股公司先覆盖 10 家科技/AI 公司；官方经营动态、港股公告与港美股新闻按来源限流，不改变模型总预算。external 股票来源由 stock.collect 专用任务采集。",
   "sources": [
     {
       "id": "rss-openai-news",
@@ -1249,6 +1249,692 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-nvda",
+      "name": "英伟达（NVDA）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://nvidianews.nvidia.com/cats/press_release.xml",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "nvda",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-amd",
+      "name": "AMD（AMD）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://ir.amd.com/news-events/press-releases/rss",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "amd",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-aapl",
+      "name": "苹果（AAPL）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.apple.com/newsroom/rss-feed.rss",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "aapl",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-amzn",
+      "name": "亚马逊（AMZN）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://www.aboutamazon.com/rss",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "amzn",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-googl",
+      "name": "Alphabet / Google（GOOGL）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://blog.google/rss/",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "googl",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-meta",
+      "name": "Meta（META）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://about.fb.com/news/feed/",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "meta",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-news-msft",
+      "name": "微软（MSFT）· 官方经营动态",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://blogs.microsoft.com/feed/",
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "requireAnyMarkers": [
+            "earnings",
+            "financial",
+            "revenue",
+            "acquir",
+            "acquisition",
+            "merger",
+            "investment",
+            "investing",
+            "invests",
+            "billion",
+            "factory",
+            "manufactur",
+            "data center",
+            "datacenter",
+            "partnership",
+            "partners",
+            "agreement",
+            "contract",
+            "supply",
+            "leadership",
+            "president",
+            "chief executive",
+            "appoint",
+            "restructur",
+            "layoff",
+            "job cuts",
+            "dividend",
+            "buyback",
+            "repurchase",
+            "capacity",
+            "expan"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 1,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "owner_entity_id": "msft",
+      "tags": [
+        "美股",
+        "公司经营",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-hkex-main",
+      "name": "披露易 · 主板公司公告",
+      "kind": "external",
+      "config": {},
+      "tags": [
+        "港股",
+        "公司公告",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-hkex-gem",
+      "name": "披露易 · GEM公司公告",
+      "kind": "external",
+      "config": {},
+      "tags": [
+        "港股",
+        "公司公告",
+        "官方"
+      ]
+    },
+    {
+      "tier": "T2",
+      "first_party": false,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-hk-sina-news",
+      "name": "新浪财经 · 港股新闻",
+      "kind": "json_list",
+      "config": {
+        "url": "https://feed.mix.sina.com.cn/api/roll/get?pageid=384&lid=2674&num=50&page=1",
+        "itemsPath": "result.data",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "intro",
+          "wapsummary"
+        ],
+        "publishedAtPath": "ctime",
+        "publishedAtUnit": "epoch_s",
+        "urlTemplate": "{raw:url}",
+        "allowUrlPrefixes": [
+          "https://finance.sina.com.cn/stock/hkstock/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "机构评级",
+            "目标价",
+            "目標價",
+            "获评",
+            "给予买入",
+            "增持评级",
+            "大行评级"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 3,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "tags": [
+        "港股",
+        "市场新闻",
+        "媒体"
+      ]
+    },
+    {
+      "tier": "T2",
+      "first_party": false,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "id": "stock-us-sina-news",
+      "name": "新浪财经 · 美股新闻",
+      "kind": "json_list",
+      "config": {
+        "url": "https://feed.mix.sina.com.cn/api/roll/get?pageid=384&lid=2672&num=50&page=1",
+        "itemsPath": "result.data",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "intro",
+          "wapsummary"
+        ],
+        "publishedAtPath": "ctime",
+        "publishedAtUnit": "epoch_s",
+        "urlTemplate": "{raw:url}",
+        "allowUrlPrefixes": [
+          "https://finance.sina.com.cn/stock/usstock/"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "机构评级",
+            "目标价",
+            "目標價",
+            "获评",
+            "给予买入",
+            "增持评级",
+            "大行评级"
+          ]
+        },
+        "_aihot": {
+          "maxNewItemsPerDay": 3,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      },
+      "tags": [
+        "美股",
+        "市场新闻",
+        "媒体"
+      ]
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "tags": [
+        "AI",
+        "官方",
+        "产品更新"
+      ],
+      "id": "web-openai-product-changelog",
+      "name": "OpenAI · ChatGPT/Codex产品更新",
+      "kind": "web_list",
+      "config": {
+        "url": "https://learn.chatgpt.com/docs/changelog",
+        "adapter": "openai_changelog",
+        "preserveUrlFragment": true,
+        "allowUrlPrefixes": [
+          "https://learn.chatgpt.com/docs/changelog#"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 3,
+          "initialBackfillLimit": 0,
+          "liveOnly": true,
+          "liveOnlyByIdentity": true
+        }
+      }
+    },
+    {
+      "tier": "T1",
+      "first_party": true,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "tags": [
+        "AI",
+        "官方",
+        "产品更新"
+      ],
+      "id": "web-xai-releases",
+      "name": "xAI · Grok官方发布记录",
+      "kind": "web_list",
+      "config": {
+        "url": "https://docs.x.ai/developers/release-notes",
+        "adapter": "xai_releases",
+        "preserveUrlFragment": true,
+        "allowUrlPrefixes": [
+          "https://docs.x.ai/developers/release-notes#"
+        ],
+        "sortByPublishedAt": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 3,
+          "initialBackfillLimit": 0,
+          "liveOnly": true,
+          "liveOnlyByIdentity": true
+        }
+      }
+    },
+    {
+      "tier": "T2",
+      "first_party": false,
+      "participation_mode": "editorial",
+      "interval_minutes": 30,
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true,
+      "tags": [
+        "AI",
+        "媒体",
+        "产品更新"
+      ],
+      "id": "rss-the-new-stack-ai",
+      "name": "The New Stack · AI新闻",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://thenewstack.io/feed/",
+        "allowCategories": [
+          "AI",
+          "AI Agents",
+          "AI Engineering",
+          "AI Models",
+          "Large Language Models",
+          "AI Strategy"
+        ],
+        "denyCategories": [
+          "Sponsored",
+          "sponsored-post",
+          "sponsored-post-contributed",
+          "sponsored-video"
+        ],
+        "sortByPublishedAt": true,
+        "fetchPublicContent": true,
+        "_aihot": {
+          "maxNewItemsPerDay": 3,
+          "initialBackfillLimit": 0,
+          "liveOnly": true
+        }
+      }
     }
   ]
 }

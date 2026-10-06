@@ -25,7 +25,7 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
 
 // Objects with fixed keys (headers and bodyJson are request data, free-form).
 const NESTED: Record<string, string[]> = {
-  _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxNewItemsPerDay"],
+  _aihot: ["initialBackfillLimit", "initialBackfillMonths", "maxNewItemsPerDay", "liveOnly", "liveOnlyByIdentity"],
   ingestNoiseFilter: ["dropMarkers", "dropMarkersTitleOnly", "keepIfMatches", "requireAnyMarkers"],
   itemUrlPrefixRewrite: ["from", "to"],
   requireBoolean: ["path", "equals"],
@@ -37,7 +37,7 @@ const NESTED: Record<string, string[]> = {
 };
 
 const VALUES: Record<string, string[]> = {
-  adapter: ["mimo_home", "szse_news", "sec_submissions"],
+  adapter: ["mimo_home", "szse_news", "sec_submissions", "openai_changelog", "xai_releases"],
   parseMode: ["html", "markdown", "docusaurus_changelog"],
 };
 
@@ -48,6 +48,10 @@ export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string
   if (config.adapter && ((kind === "json_list" && config.adapter !== "sec_submissions") || (kind === "web_list" && config.adapter === "sec_submissions"))) out.push(`adapter=${String(config.adapter)}`);
   const cap = (config._aihot as Record<string, unknown> | undefined)?.maxNewItemsPerDay;
   if (cap !== undefined && (!Number.isInteger(cap) || Number(cap) < 1 || Number(cap) > 60)) out.push("_aihot.maxNewItemsPerDay (1–60 integer required)");
+  const liveOnly = (config._aihot as Record<string, unknown> | undefined)?.liveOnly;
+  if (liveOnly !== undefined && typeof liveOnly !== "boolean") out.push("_aihot.liveOnly (boolean required)");
+  const byIdentity = (config._aihot as Record<string, unknown> | undefined)?.liveOnlyByIdentity;
+  if (byIdentity !== undefined && (typeof byIdentity !== "boolean" || byIdentity && liveOnly !== true)) out.push("_aihot.liveOnlyByIdentity (boolean; liveOnly required)");
   for (const [key, value] of Object.entries(config ?? {})) {
     if (!allowed.has(key)) out.push(key);
     else if (VALUES[key] && !VALUES[key]!.includes(String(value))) out.push(`${key}=${String(value)}`);

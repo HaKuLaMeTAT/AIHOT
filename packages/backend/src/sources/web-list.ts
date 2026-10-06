@@ -5,6 +5,7 @@ import { collapseWhitespace, stripTags } from "../lib/text.ts";
 import { readable, type ExtractedBody } from "../content/extract.ts";
 import { sanitizeBody } from "../content/sanitize.ts";
 import { jinaRead } from "../providers/jina.ts";
+import { openAiChangelog, xAiReleases } from "./product-changelogs.ts";
 import { FetchError, type Candidate, type SourceRow } from "./types.ts";
 
 const JINA_PREFIX = "https://r.jina.ai/";
@@ -326,6 +327,8 @@ export async function fetchWebList(source: SourceRow): Promise<Candidate[]> {
   const { text, viaJina, base } = await fetchListingText(source);
   const mode = source.config.adapter ?? source.config.parseMode ?? (viaJina ? "markdown" : "html");
   if (mode === "szse_news") return fromSzseNews(text, base, source);
+  if (mode === "openai_changelog") return openAiChangelog(text, base);
+  if (mode === "xai_releases") return xAiReleases(text, base);
   let out: Candidate[];
   if (mode === "mimo_home") out = await fromMimoHome(text, base, source);
   else if (mode === "markdown") out = fromMarkdown(text, base, source);

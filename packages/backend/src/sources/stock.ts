@@ -9,6 +9,7 @@ import { extractStockPdf } from "../content/stock-pdf.ts";
 import { queueProcessing } from "../jobs/content.ts";
 import { collectAnnouncements, ANNOUNCEMENT_SOURCES } from "./stock-announcements.ts";
 import { collectMarket, MARKET_SOURCE } from "./stock-market.ts";
+import { collectHongKongAnnouncements, HKEX_ANNOUNCEMENT_SOURCES } from "./hkex-announcements.ts";
 
 interface IndexedAnnouncement { id: string; source_id: string; title: string; name: string; code: string; pdf_url: string; published_at: Date }
 
@@ -36,10 +37,13 @@ export async function promoteAnnouncement(now = new Date(), extractor: (url: str
     await tx`SELECT pg_advisory_xact_lock(hashtext('stock_document_dispatch'))`;
     const used = await announcementUsage(now, tx);
     if (used.windowUsed >= used.windowLimit || used.rollingUsed >= used.rollingLimit) return null;
+    const [hk] = await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM stock_announcements
+      WHERE source_id IN ${sql(Object.values(HKEX_ANNOUNCEMENT_SOURCES))} AND promoted_at > ${new Date(now.getTime()-24*3600_000)}`;
     const [row] = await tx<IndexedAnnouncement[]>`SELECT a.id,a.source_id,a.title,a.name,a.code,a.pdf_url,a.published_at
       FROM stock_announcements a JOIN sources s ON s.id=a.source_id
       WHERE a.state='indexed' AND NOT a.baseline AND a.priority>0 AND a.published_at >= ${oldest} AND a.published_at <= ${now}
         AND s.enabled AND s.participation_mode='editorial'
+        AND (a.source_id NOT IN ${sql(Object.values(HKEX_ANNOUNCEMENT_SOURCES))} OR ${hk.n < STOCK.hongKongDocumentsPerDay})
       ORDER BY a.priority DESC,a.published_at DESC,a.id LIMIT 1 FOR UPDATE OF a`;
     if (row) await tx`UPDATE stock_announcements SET state='preparing',promoted_at=${now},updated_at=${now} WHERE id=${row.id}`;
     return row ?? null;
@@ -100,6 +104,9 @@ export async function pollStockSources(now = new Date()) {
   try { results.market = await collectMarket(now); } catch (error) { results.market = { status: "failed", error: String(error).slice(0,300) }; }
   for (const market of Object.keys(ANNOUNCEMENT_SOURCES) as Array<keyof typeof ANNOUNCEMENT_SOURCES>) {
     try { results[market] = await collectAnnouncements(market, now); } catch (error) { results[market] = { status: "failed", error: String(error).slice(0,300) }; }
+  }
+  for (const board of Object.keys(HKEX_ANNOUNCEMENT_SOURCES) as Array<keyof typeof HKEX_ANNOUNCEMENT_SOURCES>) {
+    try { results[board] = await collectHongKongAnnouncements(board, now); } catch (error) { results[board] = { status: "failed", error: String(error).slice(0,300) }; }
   }
   results.announcement = await promoteAnnouncement(now);
   results.marketReport = await composeMarketMaterial(now);

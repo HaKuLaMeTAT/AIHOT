@@ -35,6 +35,11 @@ test("recent policies, technical releases and major announcements reach the queu
   assert.ok(processingPriority({ ...material, source_id: "rss-hkex-news", title: "HKEX Launches A Place to Connect Exhibition" }, at.getTime()) < technical);
   assert.ok(processingPriority({ ...material, source_id: ANNOUNCEMENT_SOURCES.sh, title: "重大资产重组公告" }, at.getTime()) > technical);
   assert.ok(technical > processingPriority({ ...material, title: "公司活动回顾" }, at.getTime()));
+  const pledge = { ...material, title: "Codex pledges daily improvements or a full usage reset for 28 days" };
+  assert.ok(processingPriority(pledge, at.getTime()) > technical);
+  assert.ok(processingPriority({ ...pledge, first_party: false }, at.getTime()) > processingPriority({ ...material, first_party: false }, at.getTime()));
+  assert.equal(processingPriority({ ...material, title: "Claude employee interview about office life" }, at.getTime()), 12);
+  assert.equal(processingPriority({ ...pledge, source_id: "stock-us-news-msft" }, at.getTime()), 12);
   assert.equal(processingPriority({ ...material, published_at: new Date(at.getTime() - 96 * 3600_000) }, at.getTime()), -2);
   assert.ok(processingPriority({ ...material, published_at: null }, at.getTime()) > 0);
   process.env.EDITORIAL_PRIORITY_RECENT = "true";

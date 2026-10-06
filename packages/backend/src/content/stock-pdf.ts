@@ -3,8 +3,13 @@ import path from "node:path";
 import { REPO_ROOT } from "../config.ts";
 import { guardedFetch } from "../lib/http-fetch.ts";
 
+export function trustedAnnouncementPdf(url: string): boolean {
+  return /^https:\/\/static\.cninfo\.com\.cn\/finalpage\/\d{4}-\d{2}-\d{2}\/\d+\.pdf$/i.test(url)
+    || /^https:\/\/www1\.hkexnews\.hk\/listedco\/listconews\/(sehk|gem)\/\d{4}\/\d{4}\/\d{8}\d+_[ce]\.pdf$/i.test(url);
+}
+
 export async function extractStockPdf(url: string): Promise<string> {
-  if (!/^https:\/\/static\.cninfo\.com\.cn\/finalpage\/\d{4}-\d{2}-\d{2}\/\d+\.pdf$/i.test(url)) throw new Error("Untrusted announcement PDF URL");
+  if (!trustedAnnouncementPdf(url)) throw new Error("Untrusted announcement PDF URL");
   const library = process.env.STOCK_PDF_LIB;
   if (!library) throw new Error("STOCK_PDF_LIB not configured");
   const response = await guardedFetch(url, { timeoutMs: 10_000, maxBytes: 8 * 1024 * 1024 });
